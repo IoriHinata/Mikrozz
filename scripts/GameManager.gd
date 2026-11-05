@@ -50,7 +50,10 @@ func _build_level() -> void:
 	maze.coin_body_created.connect(_connect_coin)
 	maze.generate(level, viewport_size)
 	start_point = maze.start_position
-	coins_total = maze.get_tree().get_nodes_in_group("coins").size()
+	coins_total = 0
+	for child in maze.get_children():
+		if child is MikrozzCoin:
+			coins_total += 1
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	ui.hide_result()
