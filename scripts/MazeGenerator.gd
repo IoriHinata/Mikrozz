@@ -12,6 +12,7 @@ signal pressure_button_activated(index: int)
 var pop_timer: Timer
 var active_level := 1
 var pop_spawn_cells: Array[Vector2i] = []
+var pop_spawner_position := Vector2.ZERO
 
 const CoinScript = preload("res://scripts/Coin.gd")
 const PALETTES := [
@@ -217,7 +218,8 @@ func _build_objects(level_number: int) -> void:
 		pop_spawn_cells.shuffle()
 		if not pop_spawn_cells.is_empty():
 			var spawner := PopSpawnerVisual.new()
-			spawner.position = _cell_center(pop_spawn_cells[0])
+			pop_spawner_position = _cell_center(pop_spawn_cells[0])
+			spawner.position = pop_spawner_position
 			add_child(spawner)
 			pop_timer = Timer.new()
 			pop_timer.wait_time = maxf(2.8, 6.0 - float(level_number) * 0.12)
@@ -239,9 +241,8 @@ func _build_objects(level_number: int) -> void:
 func _spawn_pop_ball() -> void:
 	if pop_spawn_cells.is_empty() or not is_inside_tree():
 		return
-	var cell: Vector2i = pop_spawn_cells.pick_random()
 	var red_ball := RedPopBall.new()
-	red_ball.position = _cell_center(cell)
+	red_ball.position = pop_spawner_position
 	red_ball.linear_velocity = Vector2(randf_range(-45.0, 45.0), randf_range(-45.0, 45.0))
 	add_child(red_ball)
 	red_ball.popped.connect(func(): pop_ball_popped.emit(red_ball))
