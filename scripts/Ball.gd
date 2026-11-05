@@ -1,7 +1,7 @@
 extends RigidBody2D
 class_name MikrozzBall
 
-var tilt_controller: Node
+var tilt_controller
 @export var radius := 13.0
 
 func _ready() -> void:
