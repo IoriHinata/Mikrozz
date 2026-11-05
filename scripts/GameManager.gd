@@ -231,14 +231,12 @@ func _respawn_all() -> void:
 func _on_pressure_button_activated(index: int) -> void:
 	if not is_instance_valid(maze):
 		return
-	if maze.gate_bodies.is_empty():
-		ui.set_message("Pressure plate activated!")
-	else:
-		maze.set_gate_open(index % maze.gate_bodies.size(), true)
-		ui.set_message("Puzzle plate %d activated — mechanism unlocked" % (index + 1))
-	audio.play_ui()
+	total_run_score += 3
+	ui.set_message("Bonus plate %d activated! +3 points" % (index + 1))
+	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
-		Input.vibrate_handheld(35)
+		Input.vibrate_handheld(45)
+	_save_progress()
 
 func _on_pop_ball_popped(_red_ball: RigidBody2D) -> void:
 	total_run_score += 2
