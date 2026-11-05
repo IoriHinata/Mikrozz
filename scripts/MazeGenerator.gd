@@ -5,6 +5,8 @@ signal coin_body_created(coin: RigidBody2D)
 signal hazard_created(area: Area2D)
 signal exit_created(area: Area2D)
 
+const CoinScript = preload("res://scripts/Coin.gd")
+
 const PALETTES := [
 	{"floor": Color("#e8f3e9"), "wall": Color("#91b8a4"), "accent": Color("#a8d2bd")},
 	{"floor": Color("#fff0e7"), "wall": Color("#d7a48d"), "accent": Color("#f2c2a9")},
@@ -128,7 +130,7 @@ func _build_objects(level_number: int) -> void:
 	var coin_count := clampi(3 + int(level_number / 2), 3, 10)
 	for i in range(coin_count):
 		var path_index := clampi(int((float(i + 1) / float(coin_count + 1)) * (solution.size() - 1)), 1, solution.size() - 2)
-		var coin := MikrozzCoin.new()
+		var coin := CoinScript.new()
 		coin.position = _cell_center(solution[path_index]) + Vector2(randf_range(-4, 4), randf_range(-4, 4))
 		add_child(coin)
 		coin_body_created.emit(coin)
@@ -142,6 +144,11 @@ func _build_objects(level_number: int) -> void:
 			if placed < hazard_count and randf() < 0.3:
 				var hazard := _make_hazard(_cell_center(cell), cell_size * 0.22, placed % 2 == 0)
 				add_child(hazard)
+				if level_number >= 3:
+					var travel := Vector2(cell_size * 0.20, 0)
+					var motion := hazard.create_tween().set_loops()
+					motion.tween_property(hazard, "position", _cell_center(cell) + travel, 0.9).from(_cell_center(cell) - travel)
+					motion.tween_property(hazard, "position", _cell_center(cell) - travel, 0.9)
 				hazard_created.emit(hazard)
 				placed += 1
 	var exit_area := Area2D.new()
@@ -185,7 +192,7 @@ func _add_gate(at: Vector2, direction: int) -> void:
 	var body := StaticBody2D.new()
 	body.position = at
 	body.add_to_group("gates")
-	var size := Vector2(cell_size * 0.82, 9.0) if direction % 2 == 1 else Vector2(9.0, cell_size * 0.82)
+	var size := Vector2(9.0, cell_size * 0.82) if direction % 2 == 1 else Vector2(cell_size * 0.82, 9.0)
 	var shape := RectangleShape2D.new()
 	shape.size = size
 	var collision := CollisionShape2D.new()
