@@ -326,7 +326,7 @@ func _draw() -> void:
 			var cell := Vector2i(x, y)
 			for d in range(4):
 				var neighbor: Vector2i = cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
-				var outside := neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
+				var outside: bool = neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
 				if outside or ((d == 1 or d == 2) and cells[y][x]["walls"][d]):
 					var edge_center := _cell_edge_center(cell, d)
 					var horizontal := d == 0 or d == 2
