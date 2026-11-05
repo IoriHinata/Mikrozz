@@ -31,8 +31,6 @@ func _ready() -> void:
 	ui.gate_pressed.connect(_on_gate_pressed)
 	ui.restart_requested.connect(_restart_run)
 	ui.next_level_requested.connect(_next_level)
-	ui.calibrate_requested.connect(_calibrate)
-	ui.touch_direction_changed.connect(_set_touch_direction)
 	_start_run()
 
 func _start_run() -> void:
@@ -148,13 +146,6 @@ func _respawn_all() -> void:
 func _on_gate_pressed(index: int, pressed: bool) -> void:
 	if is_instance_valid(maze):
 		maze.set_gate_open(index, pressed)
-
-func _calibrate() -> void:
-	tilt.calibrate()
-	ui.set_message("Tilt calibrated • hold phone flat")
-
-func _set_touch_direction(direction: Vector2) -> void:
-	tilt.set_touch_direction(direction)
 
 func _update_hud() -> void:
 	ui.set_hud(level, lives, score, coins_total)
