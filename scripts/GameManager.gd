@@ -51,8 +51,11 @@ func _ready() -> void:
 	ui.touch_direction_changed.connect(_set_touch_direction)
 	ui.settings_changed.connect(_on_setting_changed)
 	ui.settings_pause_changed.connect(_on_settings_pause_changed)
+	ui.tutorial_finished.connect(_on_tutorial_finished)
 	tilt.sensor_status_changed.connect(_on_sensor_status)
 	_start_level()
+	if level == 0:
+		ui.show_tutorial()
 
 var _saved_sensitivity := 1.65
 
@@ -78,12 +81,12 @@ func _save_settings() -> void:
 func _load_progress() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PROGRESS_PATH) == OK:
-		level = maxi(1, int(cfg.get_value("progress", "level", 1)))
+		level = maxi(0, int(cfg.get_value("progress", "level", 0)))
 		total_run_score = maxi(0, int(cfg.get_value("progress", "total_score", 0)))
 
 func _save_progress(saved_level: int = -1) -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("progress", "level", maxi(1, saved_level if saved_level > 0 else level))
+	cfg.set_value("progress", "level", maxi(0, saved_level if saved_level >= 0 else level))
 	cfg.set_value("progress", "total_score", total_run_score)
 	cfg.set_value("progress", "best_score", best_score)
 	cfg.set_value("progress", "last_level_score", score)
@@ -113,6 +116,8 @@ func _build_level() -> void:
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
 	maze.generate(level, viewport_size)
+	maze.pressure_button_activated.connect(_on_pressure_button_activated)
+	maze.pop_ball_popped.connect(_on_pop_ball_popped)
 	start_point = maze.start_position
 	coins_total = _count_coins()
 	ui.make_gate_buttons(maze.gate_bodies.size())
@@ -206,6 +211,8 @@ func _respawn_all() -> void:
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
 	maze.generate(level, viewport_size)
+	maze.pressure_button_activated.connect(_on_pressure_button_activated)
+	maze.pop_ball_popped.connect(_on_pop_ball_popped)
 	start_point = maze.start_position
 	coins_total = _count_coins()
 	score = 0
@@ -215,6 +222,27 @@ func _respawn_all() -> void:
 	level_locked = false
 	ui.set_message("Room reset — try another route")
 	_update_hud()
+
+func _on_pressure_button_activated(index: int) -> void:
+	if not is_instance_valid(maze):
+		return
+	if maze.gate_bodies.is_empty():
+		ui.set_message("Pressure plate activated!")
+	else:
+		maze.set_gate_open(index % maze.gate_bodies.size(), true)
+		ui.set_message("Puzzle plate %d activated — mechanism unlocked" % (index + 1))
+	audio.play_ui()
+	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
+		Input.vibrate_handheld(35)
+
+func _on_pop_ball_popped(_red_ball: RigidBody2D) -> void:
+	total_run_score += 2
+	audio.play_coin()
+	ui.set_message("Red orb popped! +2 bonus points")
+	_save_progress()
+
+func _on_tutorial_finished() -> void:
+	ui.set_message("Practice room: collect the pearls and reach the golden exit")
 
 func _on_gate_pressed(index: int, pressed: bool) -> void:
 	if is_instance_valid(maze):
