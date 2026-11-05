@@ -43,6 +43,7 @@ func _ready() -> void:
 	ui = UIScript.new()
 	add_child(ui)
 	ui.setup(viewport_size)
+	ui.set_settings_defaults(music_volume, sfx_volume, tilt.sensitivity, vibration_enabled)
 	ui.gate_pressed.connect(_on_gate_pressed)
 	ui.restart_requested.connect(_restart_run)
 	ui.next_level_requested.connect(_next_level)
@@ -254,6 +255,7 @@ func _on_setting_changed(key: String, value: Variant) -> void:
 		"vibration":
 			vibration_enabled = bool(value)
 	_save_settings()
+	ui.set_settings_defaults(music_volume, sfx_volume, tilt.sensitivity, vibration_enabled)
 
 func _on_settings_pause_changed(paused: bool) -> void:
 	get_tree().paused = paused
