@@ -6,6 +6,8 @@ signal restart_requested
 signal next_level_requested
 signal calibrate_requested
 signal touch_direction_changed(direction: Vector2)
+signal settings_changed(key: String, value: Variant)
+signal settings_pause_changed(paused: bool)
 
 var root: Control
 var hud_label: Label
@@ -14,17 +16,22 @@ var sensor_label: Label
 var gate_buttons: Array[Button] = []
 var direction_buttons: Array[Button] = []
 var result_panel: PanelContainer
+var settings_panel: PanelContainer
+var settings_overlay: ColorRect
 var viewport_size := Vector2.ZERO
+var settings_open := false
 
 func setup(size: Vector2) -> void:
 	viewport_size = size
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(root)
 	hud_label = Label.new()
 	hud_label.position = Vector2(18, 14)
-	hud_label.size = Vector2(size.x - 36, 30)
+	hud_label.size = Vector2(size.x - 92, 30)
 	hud_label.add_theme_font_size_override("font_size", 19)
 	hud_label.add_theme_color_override("font_color", Color("#50695d"))
 	root.add_child(hud_label)
@@ -50,6 +57,14 @@ func setup(size: Vector2) -> void:
 	calibrate.add_theme_font_size_override("font_size", 11)
 	calibrate.pressed.connect(func(): calibrate_requested.emit())
 	root.add_child(calibrate)
+	var settings_button := Button.new()
+	settings_button.text = "⚙"
+	settings_button.position = Vector2(size.x - 58, 10)
+	settings_button.size = Vector2(42, 36)
+	settings_button.focus_mode = Control.FOCUS_NONE
+	settings_button.add_theme_font_size_override("font_size", 22)
+	settings_button.pressed.connect(open_settings.bind(0.32, 0.75, 1.65, true))
+	root.add_child(settings_button)
 	_build_direction_pad()
 
 func _build_direction_pad() -> void:
@@ -83,6 +98,86 @@ func _build_direction_pad() -> void:
 		button.button_up.connect(func(): touch_direction_changed.emit(Vector2.ZERO))
 		root.add_child(button)
 		direction_buttons.append(button)
+
+func open_settings(music: float, sfx: float, sensitivity: float, vibration: bool) -> void:
+	if settings_open:
+		return
+	settings_open = true
+	settings_pause_changed.emit(true)
+	settings_overlay = ColorRect.new()
+	settings_overlay.color = Color(0.12, 0.18, 0.15, 0.62)
+	settings_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(settings_overlay)
+	settings_panel = PanelContainer.new()
+	settings_panel.position = Vector2((viewport_size.x - 340) * 0.5, (viewport_size.y - 410) * 0.5)
+	settings_panel.size = Vector2(340, 410)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color("#fffaf0")
+	panel_style.border_color = Color("#bfd8c8")
+	panel_style.set_border_width_all(3)
+	panel_style.set_corner_radius_all(22)
+	settings_panel.add_theme_stylebox_override("panel", panel_style)
+	settings_overlay.add_child(settings_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	box.add_theme_constant_override("margin_left", 18)
+	box.add_theme_constant_override("margin_right", 18)
+	box.add_theme_constant_override("margin_top", 16)
+	box.add_theme_constant_override("margin_bottom", 16)
+	settings_panel.add_child(box)
+	var heading := Label.new()
+	heading.text = "GAME SETTINGS"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 23)
+	heading.add_theme_color_override("font_color", Color("#587565"))
+	box.add_child(heading)
+	_add_slider(box, "MUSIC VOLUME", music, "music")
+	_add_slider(box, "SOUND EFFECTS", sfx, "sfx")
+	_add_slider(box, "TILT SENSITIVITY", sensitivity, "sensitivity", 0.5, 3.0)
+	var vibration_toggle := CheckButton.new()
+	vibration_toggle.text = "Vibration on events"
+	vibration_toggle.button_pressed = vibration
+	vibration_toggle.toggled.connect(func(value: bool): settings_changed.emit("vibration", value))
+	box.add_child(vibration_toggle)
+	var hint := Label.new()
+	hint.text = "Progress and settings save automatically."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color("#87968c"))
+	box.add_child(hint)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.custom_minimum_size = Vector2(140, 42)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.pressed.connect(close_settings)
+	box.add_child(close)
+
+func _add_slider(parent: VBoxContainer, caption: String, initial: float, key: String, minimum: float = 0.0, maximum: float = 1.0) -> void:
+	var label := Label.new()
+	label.text = caption
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color("#61796b"))
+	parent.add_child(label)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 0.01
+	slider.value = clampf(initial, minimum, maximum)
+	slider.custom_minimum_size = Vector2(270, 24)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.value_changed.connect(func(value: float): settings_changed.emit(key, value))
+	parent.add_child(slider)
+
+func close_settings() -> void:
+	if not settings_open:
+		return
+	settings_open = false
+	if is_instance_valid(settings_overlay):
+		settings_overlay.queue_free()
+	settings_overlay = null
+	settings_panel = null
+	settings_pause_changed.emit(false)
 
 func set_sensor_status(available: bool, magnitude: float) -> void:
 	if available:
@@ -133,6 +228,7 @@ func _on_gate_up(index: int) -> void:
 	gate_pressed.emit(index, false)
 
 func show_result(title: String, detail: String, allow_next: bool) -> void:
+	close_settings()
 	if result_panel != null:
 		result_panel.queue_free()
 	result_panel = PanelContainer.new()
