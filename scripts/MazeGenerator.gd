@@ -25,6 +25,9 @@ var start_position := Vector2.ZERO
 var finish_position := Vector2.ZERO
 var board_rect := Rect2()
 var wall_count := 0
+var shape_id := 0
+var start_cell := Vector2i.ZERO
+var target_cell := Vector2i.ZERO
 
 func generate(level_number: int, viewport_size: Vector2) -> void:
 	for child in get_children():
@@ -32,15 +35,16 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 		child.queue_free()
 	gate_bodies.clear()
 	wall_count = 0
-	cols = 7
-	rows = 9 + mini(2, int((level_number - 1) / 4))
+	cols = 9 if level_number >= 5 else 7
+	rows = 11 if level_number >= 5 else 9
 	var usable := Vector2(viewport_size.x - 34.0, viewport_size.y - 238.0)
 	cell_size = floorf(minf(usable.x / cols, usable.y / rows))
-	cell_size = maxf(cell_size, 30.0)
+	cell_size = maxf(cell_size, 26.0)
 	var board_size := Vector2(cols * cell_size, rows * cell_size)
 	origin = Vector2((viewport_size.x - board_size.x) * 0.5, 92.0 + (usable.y - board_size.y) * 0.5)
 	board_rect = Rect2(origin, board_size)
-	palette = PALETTES[(level_number - 1) % PALETTES.size()]
+	palette = PALETTES[posmod(maxi(0, level_number), PALETTES.size())]
+	shape_id = 0 if level_number <= 0 else posmod(level_number - 1, 4)
 	_build_cells()
 	_build_solution()
 	_build_geometry(level_number)
@@ -49,13 +53,36 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 
 func _build_cells() -> void:
 	cells.clear()
+	var center := Vector2((cols - 1) * 0.5, (rows - 1) * 0.5)
+	var rx := maxf(1.0, cols * 0.5)
+	var ry := maxf(1.0, rows * 0.5)
 	for y in range(rows):
 		var row_data: Array = []
 		for x in range(cols):
-			row_data.append({"walls": [true, true, true, true], "visited": false})
+			var nx := (float(x) - center.x) / rx
+			var ny := (float(y) - center.y) / ry
+			var inside := true
+			match shape_id:
+				1: # rounded circular maze
+					inside = nx * nx + ny * ny <= 0.91
+				2: # diamond maze
+					inside = absf(nx) + absf(ny) <= 1.02
+				3: # hexagonal maze
+					inside = absf(nx) <= 1.0 and absf(ny) <= 0.92 and absf(nx) * 0.5 + absf(ny) <= 1.05
+			row_data.append({"walls": [true, true, true, true], "visited": false, "inside": inside})
 		cells.append(row_data)
-	var stack: Array[Vector2i] = [Vector2i.ZERO]
-	cells[0][0]["visited"] = true
+	# Choose a valid starting cell close to the upper edge.
+	var best_start := 1.0e9
+	for y in range(rows):
+		for x in range(cols):
+			if not cells[y][x]["inside"]:
+				continue
+			var cost := float(y * 100 + absf(float(x) - center.x))
+			if cost < best_start:
+				best_start = cost
+				start_cell = Vector2i(x, y)
+	cells[start_cell.y][start_cell.x]["visited"] = true
+	var stack: Array[Vector2i] = [start_cell]
 	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 	var opposites := [2, 3, 0, 1]
 	while not stack.is_empty():
@@ -63,7 +90,7 @@ func _build_cells() -> void:
 		var choices: Array[int] = []
 		for d in range(4):
 			var next_cell: Vector2i = current + dirs[d]
-			if next_cell.x >= 0 and next_cell.x < cols and next_cell.y >= 0 and next_cell.y < rows and not cells[next_cell.y][next_cell.x]["visited"]:
+			if next_cell.x >= 0 and next_cell.x < cols and next_cell.y >= 0 and next_cell.y < rows and cells[next_cell.y][next_cell.x]["inside"] and not cells[next_cell.y][next_cell.x]["visited"]:
 				choices.append(d)
 		if choices.is_empty():
 			stack.pop_back()
@@ -77,27 +104,29 @@ func _build_cells() -> void:
 
 func _build_solution() -> void:
 	solution.clear()
-	var start := Vector2i.ZERO
-	var target := Vector2i(cols - 1, rows - 1)
-	var queue: Array[Vector2i] = [start]
-	var previous: Dictionary = {start: Vector2i(-1, -1)}
+	var queue: Array[Vector2i] = [start_cell]
+	var previous: Dictionary = {start_cell: Vector2i(-1, -1)}
+	var distance: Dictionary = {start_cell: 0}
 	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	var farthest := start_cell
 	while not queue.is_empty():
 		var current: Vector2i = queue.pop_front()
-		if current == target:
-			break
+		if int(distance[current]) > int(distance[farthest]):
+			farthest = current
 		for d in range(4):
 			if not cells[current.y][current.x]["walls"][d]:
 				var next_cell: Vector2i = current + dirs[d]
 				if not previous.has(next_cell):
 					previous[next_cell] = current
+					distance[next_cell] = int(distance[current]) + 1
 					queue.append(next_cell)
-	var cursor := target
+	target_cell = farthest
+	var cursor := target_cell
 	while cursor != Vector2i(-1, -1):
 		solution.push_front(cursor)
 		cursor = previous.get(cursor, Vector2i(-1, -1))
-	start_position = _cell_center(start)
-	finish_position = _cell_center(target)
+	start_position = _cell_center(start_cell)
+	finish_position = _cell_center(target_cell)
 
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
@@ -108,26 +137,27 @@ func _build_geometry(level_number: int) -> void:
 			var a: Vector2i = solution[i - 1]
 			var b: Vector2i = solution[i]
 			candidates.append({"a": a, "b": b, "position": (_cell_center(a) + _cell_center(b)) * 0.5})
-	var gate_limit := mini(3, 1 + int((level_number - 1) / 3))
+	var gate_limit := mini(3, 1 + int(maxi(0, level_number - 1) / 3))
 	for i in range(mini(candidates.size(), gate_limit)):
 		var edge: Dictionary = candidates[i]
 		gate_edges[_edge_key(edge.a, edge.b)] = edge
+	var dirs := [Vector2i(0, -1), Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
 	for y in range(rows):
 		for x in range(cols):
+			if not cells[y][x]["inside"]:
+				continue
 			var cell := Vector2i(x, y)
-			for d in [1, 2]:
-				var neighbor := cell + (Vector2i.RIGHT if d == 1 else Vector2i.DOWN)
-				if neighbor.x >= cols or neighbor.y >= rows:
-					continue
-				var key := _edge_key(cell, neighbor)
-				if gate_edges.has(key):
-					_add_gate(gate_edges[key].position, d == 1)
-				elif cells[y][x]["walls"][d]:
-					_add_wall(_wall_center(cell, d), _wall_size(d))
-	_add_wall(Vector2(board_rect.get_center().x, board_rect.position.y), Vector2(board_rect.size.x + 8, 12))
-	_add_wall(Vector2(board_rect.get_center().x, board_rect.end.y), Vector2(board_rect.size.x + 8, 12))
-	_add_wall(Vector2(board_rect.position.x, board_rect.get_center().y), Vector2(12, board_rect.size.y))
-	_add_wall(Vector2(board_rect.end.x, board_rect.get_center().y), Vector2(12, board_rect.size.y))
+			for d in range(4):
+				var neighbor := cell + dirs[d]
+				var outside := neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
+				if outside:
+					_add_wall(_cell_edge_center(cell, d), _cell_edge_size(d))
+				elif d == 1 or d == 2:
+					var key := _edge_key(cell, neighbor)
+					if gate_edges.has(key):
+						_add_gate(gate_edges[key].position, d == 1)
+					elif cells[y][x]["walls"][d]:
+						_add_wall(_wall_center(cell, d), _wall_size(d))
 
 func _build_objects(level_number: int) -> void:
 	var coin_count := clampi(3 + int(level_number / 2), 3, 10)
@@ -218,8 +248,7 @@ func _cell_center(cell: Vector2i) -> Vector2:
 	return origin + Vector2((cell.x + 0.5) * cell_size, (cell.y + 0.5) * cell_size)
 
 func _wall_center(cell: Vector2i, d: int) -> Vector2:
-	var center := _cell_center(cell)
-	return center + (Vector2(cell_size * 0.5, 0) if d == 1 else Vector2(0, cell_size * 0.5))
+	return _cell_edge_center(cell, d)
 
 func _wall_size(d: int) -> Vector2:
 	return Vector2(12, cell_size + 5) if d == 1 else Vector2(cell_size + 5, 12)
@@ -230,33 +259,40 @@ func _edge_key(a: Vector2i, b: Vector2i) -> String:
 	return "%d,%d|%d,%d" % [first.x, first.y, second.x, second.y]
 
 func _draw() -> void:
-	draw_rect(board_rect.grow(7), palette.wall.darkened(0.12), true)
-	draw_rect(board_rect, palette.floor, true)
 	for y in range(rows):
 		for x in range(cols):
-			var rect := Rect2(origin + Vector2(x * cell_size + 2, y * cell_size + 2), Vector2(cell_size - 4, cell_size - 4))
+			if not cells[y][x]["inside"]:
+				continue
+			var rect := Rect2(origin + Vector2(x * cell_size + 1, y * cell_size + 1), Vector2(cell_size - 2, cell_size - 2))
 			draw_rect(rect, palette.floor.lightened(0.02), true)
 			draw_rect(rect, palette.wall.lightened(0.58), false, 1.0)
 			var cell := Vector2i(x, y)
-			for d in [1, 2]:
-				var neighbor := cell + (Vector2i.RIGHT if d == 1 else Vector2i.DOWN)
-				if neighbor.x >= cols or neighbor.y >= rows or not cells[y][x]["walls"][d]:
-					continue
-				var a := _wall_center(cell, d)
-				var half := cell_size * 0.5
-				var from := a + (Vector2(0, -half) if d == 1 else Vector2(-half, 0))
-				var to := a + (Vector2(0, half) if d == 1 else Vector2(half, 0))
-				draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
-				draw_line(from, to, palette.wall.lightened(0.10), 5.0, true)
-	# Draw all four outer boundaries as continuous, high-contrast rails.
-	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true)
-	draw_rect(Rect2(Vector2(board_rect.position.x - 5, board_rect.end.y - 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true)
-	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true)
-	draw_rect(Rect2(Vector2(board_rect.end.x - 5, board_rect.position.y - 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true)
+			for d in range(4):
+				var neighbor := cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
+				var outside := neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
+				if outside or ((d == 1 or d == 2) and cells[y][x]["walls"][d]):
+					var edge_center := _cell_edge_center(cell, d)
+					var horizontal := d == 0 or d == 2
+					var half := cell_size * 0.5
+					var from := edge_center + (Vector2(-half, 0) if horizontal else Vector2(0, -half))
+					var to := edge_center + (Vector2(half, 0) if horizontal else Vector2(0, half))
+					draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
+					draw_line(from, to, palette.wall.lightened(0.10), 5.0, true)
 	draw_circle(start_position, cell_size * 0.19, Color("#b5ddc5"))
 	draw_circle(start_position, cell_size * 0.11, Color("#f8fff8"))
 	draw_circle(finish_position, cell_size * 0.28, Color("#f2d58a"))
 	draw_circle(finish_position, cell_size * 0.16, Color("#fff9e7"))
+
+func _cell_edge_center(cell: Vector2i, direction: int) -> Vector2:
+	var center := _cell_center(cell)
+	match direction:
+		0: return center + Vector2(0, -cell_size * 0.5)
+		1: return center + Vector2(cell_size * 0.5, 0)
+		2: return center + Vector2(0, cell_size * 0.5)
+		_: return center + Vector2(-cell_size * 0.5, 0)
+
+func _cell_edge_size(direction: int) -> Vector2:
+	return Vector2(cell_size + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size + 5)
 
 class HazardVisual:
 	extends Node2D
