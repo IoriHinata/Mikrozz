@@ -2,19 +2,17 @@ extends Node2D
 class_name MazeGenerator
 
 signal coin_body_created(coin: RigidBody2D)
-signal hazard_created(area: Area2D)
-signal exit_created(area: Area2D)
+signal hazard_created(hazard: Area2D)
+signal exit_created(exit_area: Area2D)
 
 const CoinScript = preload("res://scripts/Coin.gd")
-
 const PALETTES := [
-	{"floor": Color("#e8f3e9"), "wall": Color("#91b8a4"), "accent": Color("#a8d2bd")},
-	{"floor": Color("#fff0e7"), "wall": Color("#d7a48d"), "accent": Color("#f2c2a9")},
-	{"floor": Color("#f0ebfa"), "wall": Color("#a99acb"), "accent": Color("#c7b8e8")},
-	{"floor": Color("#fbf5d9"), "wall": Color("#c8b66f"), "accent": Color("#e8d98f")},
-	{"floor": Color("#e7f2fa"), "wall": Color("#8eafc9"), "accent": Color("#b4d5e8")}
+	{"floor": Color("#f1f7ef"), "wall": Color("#719b87"), "accent": Color("#a9d8c0")},
+	{"floor": Color("#fff4ed"), "wall": Color("#b98572"), "accent": Color("#e9b9a4")},
+	{"floor": Color("#f4f0fb"), "wall": Color("#9182b8"), "accent": Color("#c5b8e5")},
+	{"floor": Color("#fff9e5"), "wall": Color("#a99655"), "accent": Color("#e7d48c")},
+	{"floor": Color("#edf6fc"), "wall": Color("#7296b4"), "accent": Color("#b2d4e9")}
 ]
-
 var cols := 7
 var rows := 9
 var cell_size := 42.0
@@ -23,23 +21,24 @@ var palette: Dictionary
 var cells: Array = []
 var solution: Array[Vector2i] = []
 var gate_bodies: Array[StaticBody2D] = []
-var gate_visuals: Array[Node2D] = []
 var start_position := Vector2.ZERO
 var finish_position := Vector2.ZERO
 var board_rect := Rect2()
+var wall_count := 0
 
 func generate(level_number: int, viewport_size: Vector2) -> void:
 	for child in get_children():
+		remove_child(child)
 		child.queue_free()
 	gate_bodies.clear()
-	gate_visuals.clear()
+	wall_count = 0
 	cols = 7
 	rows = 9 + mini(2, int((level_number - 1) / 4))
-	var usable := Vector2(viewport_size.x - 28.0, viewport_size.y - 190.0)
+	var usable := Vector2(viewport_size.x - 34.0, viewport_size.y - 238.0)
 	cell_size = floorf(minf(usable.x / cols, usable.y / rows))
-	cell_size = maxf(cell_size, 32.0)
+	cell_size = maxf(cell_size, 30.0)
 	var board_size := Vector2(cols * cell_size, rows * cell_size)
-	origin = Vector2((viewport_size.x - board_size.x) * 0.5, 76.0 + (usable.y - board_size.y) * 0.5)
+	origin = Vector2((viewport_size.x - board_size.x) * 0.5, 92.0 + (usable.y - board_size.y) * 0.5)
 	board_rect = Rect2(origin, board_size)
 	palette = PALETTES[(level_number - 1) % PALETTES.size()]
 	_build_cells()
@@ -81,8 +80,7 @@ func _build_solution() -> void:
 	var start := Vector2i.ZERO
 	var target := Vector2i(cols - 1, rows - 1)
 	var queue: Array[Vector2i] = [start]
-	var previous: Dictionary = {}
-	previous[start] = Vector2i(-1, -1)
+	var previous: Dictionary = {start: Vector2i(-1, -1)}
 	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 	while not queue.is_empty():
 		var current: Vector2i = queue.pop_front()
@@ -104,60 +102,59 @@ func _build_solution() -> void:
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
 	var candidates: Array[Dictionary] = []
-	for i in range(2, solution.size() - 1):
-		if i % maxi(3, 7 - int(level_number / 3)) == 0:
+	var spacing := maxi(4, 8 - int(level_number / 3))
+	for i in range(3, solution.size() - 2):
+		if i % spacing == 0:
 			var a: Vector2i = solution[i - 1]
 			var b: Vector2i = solution[i]
-			var d := _direction_index(b - a)
-			candidates.append({"cell": a, "direction": d, "position": (_cell_center(a) + _cell_center(b)) * 0.5})
-	var gate_limit := mini(3, 1 + int((level_number - 1) / 2))
-	candidates.resize(mini(candidates.size(), gate_limit))
-	for gate in candidates:
-		gate_edges[_edge_key(gate.cell, gate.direction)] = gate
+			candidates.append({"a": a, "b": b, "position": (_cell_center(a) + _cell_center(b)) * 0.5})
+	var gate_limit := mini(3, 1 + int((level_number - 1) / 3))
+	for i in range(mini(candidates.size(), gate_limit)):
+		var edge: Dictionary = candidates[i]
+		gate_edges[_edge_key(edge.a, edge.b)] = edge
 	for y in range(rows):
 		for x in range(cols):
 			var cell := Vector2i(x, y)
-			for d in range(4):
-				if cells[y][x]["walls"][d]:
+			for d in [1, 2]:
+				var neighbor := cell + (Vector2i.RIGHT if d == 1 else Vector2i.DOWN)
+				if neighbor.x >= cols or neighbor.y >= rows:
+					continue
+				var key := _edge_key(cell, neighbor)
+				if gate_edges.has(key):
+					_add_gate(gate_edges[key].position, d == 1)
+				elif cells[y][x]["walls"][d]:
 					_add_wall(_wall_center(cell, d), _wall_size(d))
-				elif gate_edges.has(_edge_key(cell, d)):
-					_add_gate(gate_edges[_edge_key(cell, d)].position, d)
-	_add_wall(Vector2(board_rect.get_center().x, board_rect.position.y - 5), Vector2(board_rect.size.x + 10, 10))
-	_add_wall(Vector2(board_rect.get_center().x, board_rect.end.y + 5), Vector2(board_rect.size.x + 10, 10))
-	_add_wall(Vector2(board_rect.position.x - 5, board_rect.get_center().y), Vector2(10, board_rect.size.y))
-	_add_wall(Vector2(board_rect.end.x + 5, board_rect.get_center().y), Vector2(10, board_rect.size.y))
+	_add_wall(Vector2(board_rect.get_center().x, board_rect.position.y), Vector2(board_rect.size.x + 8, 12))
+	_add_wall(Vector2(board_rect.get_center().x, board_rect.end.y), Vector2(board_rect.size.x + 8, 12))
+	_add_wall(Vector2(board_rect.position.x, board_rect.get_center().y), Vector2(12, board_rect.size.y))
+	_add_wall(Vector2(board_rect.end.x, board_rect.get_center().y), Vector2(12, board_rect.size.y))
 
 func _build_objects(level_number: int) -> void:
 	var coin_count := clampi(3 + int(level_number / 2), 3, 10)
 	for i in range(coin_count):
 		var path_index := clampi(int((float(i + 1) / float(coin_count + 1)) * (solution.size() - 1)), 1, solution.size() - 2)
 		var coin := CoinScript.new()
-		coin.position = _cell_center(solution[path_index]) + Vector2(randf_range(-4, 4), randf_range(-4, 4))
+		coin.position = _cell_center(solution[path_index])
 		add_child(coin)
 		coin_body_created.emit(coin)
 	var hazard_count := mini(12, maxi(0, int((level_number - 1) * 1.15)))
-	var placed := 0
+	var candidates: Array[Vector2i] = []
 	for y in range(rows):
 		for x in range(cols):
 			var cell := Vector2i(x, y)
-			if cell in solution or cell == Vector2i.ZERO or cell == Vector2i(cols - 1, rows - 1):
-				continue
-			if placed < hazard_count and randf() < 0.3:
-				var hazard := _make_hazard(_cell_center(cell), cell_size * 0.22, placed % 2 == 0)
-				add_child(hazard)
-				if level_number >= 3:
-					var travel := Vector2(cell_size * 0.20, 0)
-					var motion := hazard.create_tween().set_loops()
-					motion.tween_property(hazard, "position", _cell_center(cell) + travel, 0.9).from(_cell_center(cell) - travel)
-					motion.tween_property(hazard, "position", _cell_center(cell) - travel, 0.9)
-				hazard_created.emit(hazard)
-				placed += 1
+			if cell not in solution and cell != Vector2i.ZERO and cell != Vector2i(cols - 1, rows - 1):
+				candidates.append(cell)
+	candidates.shuffle()
+	for i in range(mini(hazard_count, candidates.size())):
+		var hazard := _make_hazard(_cell_center(candidates[i]), cell_size * 0.20, i % 2 == 0)
+		add_child(hazard)
+		hazard_created.emit(hazard)
 	var exit_area := Area2D.new()
 	exit_area.name = "Exit"
 	exit_area.add_to_group("exit")
 	exit_area.position = finish_position
 	var exit_shape := CircleShape2D.new()
-	exit_shape.radius = 16.0
+	exit_shape.radius = cell_size * 0.30
 	var exit_collision := CollisionShape2D.new()
 	exit_collision.shape = exit_shape
 	exit_area.add_child(exit_collision)
@@ -188,12 +185,13 @@ func _add_wall(at: Vector2, size: Vector2) -> void:
 	collision.shape = shape
 	body.add_child(collision)
 	add_child(body)
+	wall_count += 1
 
-func _add_gate(at: Vector2, direction: int) -> void:
+func _add_gate(at: Vector2, vertical: bool) -> void:
 	var body := StaticBody2D.new()
 	body.position = at
 	body.add_to_group("gates")
-	var size := Vector2(9.0, cell_size * 0.82) if direction % 2 == 1 else Vector2(cell_size * 0.82, 9.0)
+	var size := Vector2(11.0, cell_size * 0.88) if vertical else Vector2(cell_size * 0.88, 11.0)
 	var shape := RectangleShape2D.new()
 	shape.size = size
 	var collision := CollisionShape2D.new()
@@ -205,7 +203,6 @@ func _add_gate(at: Vector2, direction: int) -> void:
 	body.add_child(visual)
 	add_child(body)
 	gate_bodies.append(body)
-	gate_visuals.append(visual)
 
 func set_gate_open(index: int, opened: bool) -> void:
 	if index < 0 or index >= gate_bodies.size():
@@ -213,41 +210,53 @@ func set_gate_open(index: int, opened: bool) -> void:
 	for child in gate_bodies[index].get_children():
 		if child is CollisionShape2D:
 			child.set_deferred("disabled", opened)
-	gate_visuals[index].visible = not opened
+	for child in gate_bodies[index].get_children():
+		if child is GateVisual:
+			child.visible = not opened
 
 func _cell_center(cell: Vector2i) -> Vector2:
 	return origin + Vector2((cell.x + 0.5) * cell_size, (cell.y + 0.5) * cell_size)
 
 func _wall_center(cell: Vector2i, d: int) -> Vector2:
 	var center := _cell_center(cell)
-	match d:
-		0: return center + Vector2(0, -cell_size * 0.5)
-		1: return center + Vector2(cell_size * 0.5, 0)
-		2: return center + Vector2(0, cell_size * 0.5)
-		_: return center + Vector2(-cell_size * 0.5, 0)
+	return center + (Vector2(cell_size * 0.5, 0) if d == 1 else Vector2(0, cell_size * 0.5))
 
 func _wall_size(d: int) -> Vector2:
-	return Vector2(cell_size + 4, 9) if d % 2 == 0 else Vector2(9, cell_size + 4)
+	return Vector2(12, cell_size + 5) if d == 1 else Vector2(cell_size + 5, 12)
 
-func _direction_index(delta: Vector2i) -> int:
-	if delta == Vector2i(0, -1): return 0
-	if delta == Vector2i(1, 0): return 1
-	if delta == Vector2i(0, 1): return 2
-	return 3
-
-func _edge_key(cell: Vector2i, d: int) -> String:
-	return "%d,%d:%d" % [cell.x, cell.y, d]
+func _edge_key(a: Vector2i, b: Vector2i) -> String:
+	var first := a if (a.y < b.y or (a.y == b.y and a.x < b.x)) else b
+	var second := b if first == a else a
+	return "%d,%d|%d,%d" % [first.x, first.y, second.x, second.y]
 
 func _draw() -> void:
+	draw_rect(board_rect.grow(7), palette.wall.darkened(0.12), true, true, 12.0)
 	draw_rect(board_rect, palette.floor, true)
-	draw_rect(board_rect, palette.wall.darkened(0.08), false, 3.0)
 	for y in range(rows):
 		for x in range(cols):
-			var rect := Rect2(origin + Vector2(x * cell_size + 3, y * cell_size + 3), Vector2(cell_size - 6, cell_size - 6))
-			draw_rect(rect, palette.floor.lightened(0.025), true)
-	draw_circle(start_position, 11, Color("#b5d9c2"))
-	draw_circle(finish_position, 13, Color("#f2d99a"))
-	draw_circle(finish_position, 7, Color("#fff8df"))
+			var rect := Rect2(origin + Vector2(x * cell_size + 2, y * cell_size + 2), Vector2(cell_size - 4, cell_size - 4))
+			draw_rect(rect, palette.floor.lightened(0.02), true)
+			draw_rect(rect, palette.wall.lightened(0.58), false, 1.0)
+			var cell := Vector2i(x, y)
+			for d in [1, 2]:
+				var neighbor := cell + (Vector2i.RIGHT if d == 1 else Vector2i.DOWN)
+				if neighbor.x >= cols or neighbor.y >= rows or not cells[y][x]["walls"][d]:
+					continue
+				var a := _wall_center(cell, d)
+				var half := cell_size * 0.5
+				var from := a + (Vector2(0, -half) if d == 1 else Vector2(-half, 0))
+				var to := a + (Vector2(0, half) if d == 1 else Vector2(half, 0))
+				draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
+				draw_line(from, to, palette.wall.lightened(0.10), 5.0, true)
+	# Draw all four outer boundaries as continuous, high-contrast rails.
+	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true, true, 4.0)
+	draw_rect(Rect2(Vector2(board_rect.position.x - 5, board_rect.end.y - 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true, true, 4.0)
+	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true, true, 4.0)
+	draw_rect(Rect2(Vector2(board_rect.end.x - 5, board_rect.position.y - 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true, true, 4.0)
+	draw_circle(start_position, cell_size * 0.19, Color("#b5ddc5"))
+	draw_circle(start_position, cell_size * 0.11, Color("#f8fff8"))
+	draw_circle(finish_position, cell_size * 0.28, Color("#f2d58a"))
+	draw_circle(finish_position, cell_size * 0.16, Color("#fff9e7"))
 
 class HazardVisual:
 	extends Node2D
@@ -256,10 +265,10 @@ class HazardVisual:
 	func _draw() -> void:
 		if spikes:
 			for i in range(8):
-				var a := TAU * float(i) / 8.0
-				var tip := Vector2(cos(a), sin(a)) * radius
-				var left := Vector2(cos(a - 0.32), sin(a - 0.32)) * radius * 0.48
-				var right := Vector2(cos(a + 0.32), sin(a + 0.32)) * radius * 0.48
+				var angle := TAU * float(i) / 8.0
+				var tip := Vector2(cos(angle), sin(angle)) * radius
+				var left := Vector2(cos(angle - 0.32), sin(angle - 0.32)) * radius * 0.48
+				var right := Vector2(cos(angle + 0.32), sin(angle + 0.32)) * radius * 0.48
 				draw_colored_polygon(PackedVector2Array([tip, left, right]), Color("#d88e9a"))
 		else:
 			draw_circle(Vector2.ZERO, radius, Color("#7d8195"))
@@ -271,5 +280,5 @@ class GateVisual:
 	var size := Vector2.ONE
 	var color := Color.WHITE
 	func _draw() -> void:
-		draw_rect(Rect2(-size * 0.5, size), color, true)
-		draw_rect(Rect2(-size * 0.5, size), color.darkened(0.2), false, 2.0)
+		draw_rect(Rect2(-size * 0.5, size), color.darkened(0.18), true, true, 3.0)
+		draw_rect(Rect2(-size * 0.5 + Vector2(2, 2), size - Vector2(4, 4)), color, true, true, 2.0)
