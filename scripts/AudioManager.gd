@@ -84,7 +84,7 @@ func _make_music() -> AudioStreamWAV:
 		var beat_index := mini(notes.size() - 1, int(t / beat))
 		var local_t := fmod(t, beat)
 		var envelope := minf(1.0, local_t * 12.0) * (0.72 + 0.28 * cos(PI * local_t / beat))
-		var f := notes[beat_index]
+		var f: float = float(notes[beat_index])
 		var tone := sin(TAU * f * t) * 0.55 + sin(TAU * f * 0.5 * t) * 0.18
 		var pad := sin(TAU * (f * 1.5) * t) * 0.12
 		var sample := (tone + pad) * envelope * 0.13
