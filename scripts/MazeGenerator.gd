@@ -157,8 +157,8 @@ func _build_geometry(level_number: int) -> void:
 				continue
 			var cell := Vector2i(x, y)
 			for d in range(4):
-				var neighbor := cell + dirs[d]
-				var outside := neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
+				var neighbor: Vector2i = cell + dirs[d]
+				var outside: bool = neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
 				if outside:
 					_add_wall(_cell_edge_center(cell, d), _cell_edge_size(d))
 				elif d == 1 or d == 2:
@@ -324,7 +324,7 @@ func _draw() -> void:
 			draw_rect(rect, palette.wall.lightened(0.58), false, 1.0)
 			var cell := Vector2i(x, y)
 			for d in range(4):
-				var neighbor := cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
+				var neighbor: Vector2i = cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
 				var outside := neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
 				if outside or ((d == 1 or d == 2) and cells[y][x]["walls"][d]):
 					var edge_center := _cell_edge_center(cell, d)
@@ -424,7 +424,7 @@ class RedPopBall:
 		input_event.connect(_on_input_event)
 		queue_redraw()
 	func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-		var tapped := event is InputEventScreenTouch and event.pressed
+		var tapped: bool = event is InputEventScreenTouch and event.pressed
 		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
 		if tapped:
 			popped.emit()
