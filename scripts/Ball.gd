@@ -8,7 +8,7 @@ func _ready() -> void:
 	add_to_group("player")
 	gravity_scale = 0.0
 	mass = 1.0
-	linear_damp = 1.35
+	linear_damp = 2.8
 	angular_damp = 2.0
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
 	contact_monitor = true
@@ -23,6 +23,8 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if tilt_controller != null:
 		apply_central_force(tilt_controller.get_force())
+	if linear_velocity.length() > 430.0:
+		linear_velocity = linear_velocity.normalized() * 430.0
 
 func _draw() -> void:
 	draw_circle(Vector2(0, 2), radius + 1.5, Color("#d7e5dc"))
