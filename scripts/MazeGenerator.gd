@@ -230,7 +230,7 @@ func _edge_key(a: Vector2i, b: Vector2i) -> String:
 	return "%d,%d|%d,%d" % [first.x, first.y, second.x, second.y]
 
 func _draw() -> void:
-	draw_rect(board_rect.grow(7), palette.wall.darkened(0.12), true, true, 12.0)
+	draw_rect(board_rect.grow(7), palette.wall.darkened(0.12), true)
 	draw_rect(board_rect, palette.floor, true)
 	for y in range(rows):
 		for x in range(cols):
@@ -249,10 +249,10 @@ func _draw() -> void:
 				draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
 				draw_line(from, to, palette.wall.lightened(0.10), 5.0, true)
 	# Draw all four outer boundaries as continuous, high-contrast rails.
-	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true, true, 4.0)
-	draw_rect(Rect2(Vector2(board_rect.position.x - 5, board_rect.end.y - 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true, true, 4.0)
-	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true, true, 4.0)
-	draw_rect(Rect2(Vector2(board_rect.end.x - 5, board_rect.position.y - 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true, true, 4.0)
+	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true)
+	draw_rect(Rect2(Vector2(board_rect.position.x - 5, board_rect.end.y - 5), Vector2(board_rect.size.x + 10, 10)), palette.wall, true)
+	draw_rect(Rect2(board_rect.position - Vector2(5, 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true)
+	draw_rect(Rect2(Vector2(board_rect.end.x - 5, board_rect.position.y - 5), Vector2(10, board_rect.size.y + 10)), palette.wall, true)
 	draw_circle(start_position, cell_size * 0.19, Color("#b5ddc5"))
 	draw_circle(start_position, cell_size * 0.11, Color("#f8fff8"))
 	draw_circle(finish_position, cell_size * 0.28, Color("#f2d58a"))
