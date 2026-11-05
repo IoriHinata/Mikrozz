@@ -4,11 +4,15 @@ class_name MikrozzUI
 signal gate_pressed(index: int, pressed: bool)
 signal restart_requested
 signal next_level_requested
+signal calibrate_requested
+signal touch_direction_changed(direction: Vector2)
 
 var root: Control
 var hud_label: Label
 var message_label: Label
+var sensor_label: Label
 var gate_buttons: Array[Button] = []
+var direction_buttons: Array[Button] = []
 var result_panel: PanelContainer
 var viewport_size := Vector2.ZERO
 
@@ -20,16 +24,73 @@ func setup(size: Vector2) -> void:
 	add_child(root)
 	hud_label = Label.new()
 	hud_label.position = Vector2(18, 14)
+	hud_label.size = Vector2(size.x - 36, 30)
 	hud_label.add_theme_font_size_override("font_size", 19)
 	hud_label.add_theme_color_override("font_color", Color("#50695d"))
 	root.add_child(hud_label)
 	message_label = Label.new()
-	message_label.position = Vector2(0, 54)
-	message_label.size = Vector2(size.x, 30)
+	message_label.position = Vector2(10, 52)
+	message_label.size = Vector2(size.x - 20, 30)
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message_label.add_theme_font_size_override("font_size", 14)
+	message_label.add_theme_font_size_override("font_size", 13)
 	message_label.add_theme_color_override("font_color", Color("#6c8075"))
 	root.add_child(message_label)
+	sensor_label = Label.new()
+	sensor_label.position = Vector2(18, 84)
+	sensor_label.size = Vector2(190, 24)
+	sensor_label.add_theme_font_size_override("font_size", 11)
+	sensor_label.add_theme_color_override("font_color", Color("#6c8075"))
+	sensor_label.text = "TILT SENSOR: CHECKING..."
+	root.add_child(sensor_label)
+	var calibrate := Button.new()
+	calibrate.text = "CALIBRATE"
+	calibrate.position = Vector2(size.x - 112, 80)
+	calibrate.size = Vector2(94, 32)
+	calibrate.focus_mode = Control.FOCUS_NONE
+	calibrate.add_theme_font_size_override("font_size", 11)
+	calibrate.pressed.connect(func(): calibrate_requested.emit())
+	root.add_child(calibrate)
+	_build_direction_pad()
+
+func _build_direction_pad() -> void:
+	var base := Vector2(18, viewport_size.y - 154)
+	var specs := [
+		{"text": "↑", "offset": Vector2(42, 0), "direction": Vector2.UP},
+		{"text": "←", "offset": Vector2(0, 42), "direction": Vector2.LEFT},
+		{"text": "↓", "offset": Vector2(42, 42), "direction": Vector2.DOWN},
+		{"text": "→", "offset": Vector2(84, 42), "direction": Vector2.RIGHT}
+	]
+	for spec in specs:
+		var button := Button.new()
+		button.text = spec.text
+		button.position = base + spec.offset
+		button.size = Vector2(40, 40)
+		button.focus_mode = Control.FOCUS_NONE
+		button.add_theme_font_size_override("font_size", 18)
+		button.add_theme_color_override("font_color", Color("#50695d"))
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color("#d7eadf")
+		normal.border_color = Color("#9abda8")
+		normal.set_border_width_all(2)
+		normal.set_corner_radius_all(12)
+		button.add_theme_stylebox_override("normal", normal)
+		var pressed := StyleBoxFlat.new()
+		pressed.bg_color = Color("#8fbea2")
+		pressed.set_corner_radius_all(12)
+		button.add_theme_stylebox_override("pressed", pressed)
+		var direction: Vector2 = spec.direction
+		button.button_down.connect(func(): touch_direction_changed.emit(direction))
+		button.button_up.connect(func(): touch_direction_changed.emit(Vector2.ZERO))
+		root.add_child(button)
+		direction_buttons.append(button)
+
+func set_sensor_status(available: bool, magnitude: float) -> void:
+	if available:
+		sensor_label.text = "TILT SENSOR: ACTIVE  %.1f" % magnitude
+		sensor_label.add_theme_color_override("font_color", Color("#477d5c"))
+	else:
+		sensor_label.text = "TILT SENSOR: UNAVAILABLE"
+		sensor_label.add_theme_color_override("font_color", Color("#b06d65"))
 
 func set_hud(level: int, lives: int, score: int, total: int) -> void:
 	hud_label.text = "LEVEL %02d     ♥ %d     COINS %d/%d" % [level, lives, score, total]
@@ -41,12 +102,11 @@ func make_gate_buttons(count: int) -> void:
 	for button in gate_buttons:
 		button.queue_free()
 	gate_buttons.clear()
-	var positions := [Vector2(18, viewport_size.y - 112), Vector2(viewport_size.x - 112, viewport_size.y - 112), Vector2(viewport_size.x * 0.5 - 47, viewport_size.y - 112)]
 	for i in range(count):
 		var button := Button.new()
 		button.text = "HOLD %d" % (i + 1)
-		button.position = positions[i]
-		button.size = Vector2(94, 76)
+		button.position = Vector2(viewport_size.x - 112, viewport_size.y - 112 - float(i) * 84.0)
+		button.size = Vector2(94, 72)
 		button.focus_mode = Control.FOCUS_NONE
 		button.add_theme_font_size_override("font_size", 15)
 		button.add_theme_color_override("font_color", Color("#526d60"))
@@ -69,7 +129,6 @@ func make_gate_buttons(count: int) -> void:
 
 func _on_gate_down(index: int) -> void:
 	gate_pressed.emit(index, true)
-
 func _on_gate_up(index: int) -> void:
 	gate_pressed.emit(index, false)
 
