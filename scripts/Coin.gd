@@ -1,7 +1,7 @@
 extends RigidBody2D
 class_name MikrozzCoin
 
-var tilt_controller: Node
+var tilt_controller
 
 func _ready() -> void:
 	add_to_group("coins")
