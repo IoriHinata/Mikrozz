@@ -3,28 +3,43 @@ const BallScript = preload("res://scripts/Ball.gd")
 const MazeScript = preload("res://scripts/MazeGenerator.gd")
 const TiltScript = preload("res://scripts/TiltController.gd")
 const UIScript = preload("res://scripts/UI.gd")
+const AudioScript = preload("res://scripts/AudioManager.gd")
+const PROGRESS_PATH := "user://progress.cfg"
+const SETTINGS_PATH := "user://settings.cfg"
+
 var level := 1
 var lives := 3
 var score := 0
 var coins_total := 0
 var best_score := 0
+var total_run_score := 0
 var maze
 var ball
 var tilt
 var ui
+var audio
 var level_locked := false
 var viewport_size := Vector2.ZERO
 var start_point := Vector2.ZERO
-var total_run_score := 0
+var music_volume := 0.32
+var sfx_volume := 0.75
+var vibration_enabled := true
 
 func _ready() -> void:
 	randomize()
 	viewport_size = get_viewport_rect().size
-	var config := ConfigFile.new()
-	if config.load("user://records.cfg") == OK:
-		best_score = int(config.get_value("records", "best_score", 0))
+	_load_settings()
+	_load_progress()
+	var records := ConfigFile.new()
+	if records.load("user://records.cfg") == OK:
+		best_score = int(records.get_value("records", "best_score", 0))
 	tilt = TiltScript.new()
 	add_child(tilt)
+	tilt.sensitivity = _saved_sensitivity
+	audio = AudioScript.new()
+	add_child(audio)
+	audio.set_music_volume(music_volume)
+	audio.set_sfx_volume(sfx_volume)
 	ui = UIScript.new()
 	add_child(ui)
 	ui.setup(viewport_size)
@@ -33,18 +48,59 @@ func _ready() -> void:
 	ui.next_level_requested.connect(_next_level)
 	ui.calibrate_requested.connect(_calibrate_tilt)
 	ui.touch_direction_changed.connect(_set_touch_direction)
+	ui.settings_changed.connect(_on_setting_changed)
+	ui.settings_pause_changed.connect(_on_settings_pause_changed)
 	tilt.sensor_status_changed.connect(_on_sensor_status)
-	_start_run()
+	_start_level()
+
+var _saved_sensitivity := 1.65
+
+func _load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return
+	music_volume = clampf(float(cfg.get_value("audio", "music", music_volume)), 0.0, 1.0)
+	sfx_volume = clampf(float(cfg.get_value("audio", "sfx", sfx_volume)), 0.0, 1.0)
+	_saved_sensitivity = clampf(float(cfg.get_value("controls", "sensitivity", _saved_sensitivity)), 0.5, 3.0)
+	vibration_enabled = bool(cfg.get_value("controls", "vibration", vibration_enabled))
+
+func _save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("audio", "music", music_volume)
+	cfg.set_value("audio", "sfx", sfx_volume)
+	cfg.set_value("controls", "sensitivity", tilt.sensitivity if is_instance_valid(tilt) else _saved_sensitivity)
+	cfg.set_value("controls", "vibration", vibration_enabled)
+	var error := cfg.save(SETTINGS_PATH)
+	if error != OK:
+		push_warning("Could not save settings: %s" % error)
+
+func _load_progress() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(PROGRESS_PATH) == OK:
+		level = maxi(1, int(cfg.get_value("progress", "level", 1)))
+		total_run_score = maxi(0, int(cfg.get_value("progress", "total_score", 0)))
+
+func _save_progress(saved_level: int = -1) -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("progress", "level", maxi(1, saved_level if saved_level > 0 else level))
+	cfg.set_value("progress", "total_score", total_run_score)
+	cfg.set_value("progress", "best_score", best_score)
+	cfg.set_value("progress", "last_level_score", score)
+	var error := cfg.save(PROGRESS_PATH)
+	if error != OK:
+		push_warning("Could not save progress: %s" % error)
 
 func _start_run() -> void:
 	level = 1
 	lives = 3
 	total_run_score = 0
+	_save_progress()
 	_start_level()
 
 func _start_level() -> void:
 	level_locked = false
 	score = 0
+	_save_progress()
 	_build_level()
 
 func _build_level() -> void:
@@ -94,6 +150,10 @@ func _on_coin_body(body: Node, coin: Node2D) -> void:
 		score += 1
 		total_run_score += 1
 		coin.queue_free()
+		_save_progress()
+		if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
+			Input.vibrate_handheld(25)
+		audio.play_coin()
 		_update_hud()
 		if score >= coins_total:
 			ui.set_message("All pearls found! Reach the golden exit")
@@ -110,9 +170,13 @@ func _on_exit_body(body: Node) -> void:
 		return
 	level_locked = true
 	best_score = maxi(best_score, total_run_score)
-	var config := ConfigFile.new()
-	config.set_value("records", "best_score", best_score)
-	config.save("user://records.cfg")
+	var records := ConfigFile.new()
+	records.set_value("records", "best_score", best_score)
+	records.save("user://records.cfg")
+	_save_progress(level + 1)
+	audio.play_win()
+	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
+		Input.vibrate_handheld(90)
 	ui.show_result("MAZE CLEARED!", "Level %d • Run score %d • Best %d" % [level, total_run_score, best_score], true)
 
 func _lose_life() -> void:
@@ -120,8 +184,12 @@ func _lose_life() -> void:
 		return
 	level_locked = true
 	lives -= 1
+	audio.play_hit()
+	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
+		Input.vibrate_handheld(65)
 	_update_hud()
 	if lives <= 0:
+		_save_progress()
 		ui.show_result("OUT OF LIVES", "Run score: %d" % total_run_score, false)
 	else:
 		_respawn_all.call_deferred()
@@ -140,6 +208,7 @@ func _respawn_all() -> void:
 	start_point = maze.start_position
 	coins_total = _count_coins()
 	score = 0
+	_save_progress()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	level_locked = false
@@ -169,3 +238,29 @@ func _set_touch_direction(direction: Vector2) -> void:
 
 func _on_sensor_status(available: bool, magnitude: float) -> void:
 	ui.set_sensor_status(available, magnitude)
+
+func _on_setting_changed(key: String, value: Variant) -> void:
+	match key:
+		"music":
+			music_volume = float(value)
+			audio.set_music_volume(music_volume)
+		"sfx":
+			sfx_volume = float(value)
+			audio.set_sfx_volume(sfx_volume)
+			audio.play_ui()
+		"sensitivity":
+			tilt.sensitivity = float(value)
+			_saved_sensitivity = tilt.sensitivity
+		"vibration":
+			vibration_enabled = bool(value)
+	_save_settings()
+
+func _on_settings_pause_changed(paused: bool) -> void:
+	get_tree().paused = paused
+	if not paused:
+		audio.play_ui()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		_save_progress()
+		_save_settings()
