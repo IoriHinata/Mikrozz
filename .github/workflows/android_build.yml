@@ -89,7 +89,11 @@ jobs:
       - name: Export debug APK
         run: |
           mkdir -p build
-          "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --export-debug "Android" "build/PastelMaze.apk"
+          echo "Android SDK: $ANDROID_SDK_ROOT"
+          test -d "$ANDROID_SDK_ROOT/platform-tools"
+          test -d "$ANDROID_SDK_ROOT/platforms/android-35"
+          test -d "$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$GODOT_BIN" --headless --verbose --path "$GITHUB_WORKSPACE" --export-debug "Android" "build/PastelMaze.apk"
 
       - name: Verify APK
         run: |
