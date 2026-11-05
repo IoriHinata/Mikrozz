@@ -1,6 +1,8 @@
 extends RigidBody2D
 class_name MikrozzCoin
 
+var tilt_controller: Node
+
 func _ready() -> void:
 	add_to_group("coins")
 	gravity_scale = 0.0
@@ -16,6 +18,10 @@ func _ready() -> void:
 	collision.shape = shape
 	add_child(collision)
 	queue_redraw()
+
+func _physics_process(_delta: float) -> void:
+	if tilt_controller != null:
+		apply_central_force(tilt_controller.get_force() * 0.72)
 
 func _draw() -> void:
 	draw_circle(Vector2(0, 1), 9.0, Color("#d5b96d", 0.28))
