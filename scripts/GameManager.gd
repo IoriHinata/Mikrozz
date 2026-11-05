@@ -13,6 +13,7 @@ var score := 0
 var coins_total := 0
 var best_score := 0
 var total_run_score := 0
+var tutorial_completed := false
 var maze
 var ball
 var tilt
@@ -83,6 +84,9 @@ func _load_progress() -> void:
 	if cfg.load(PROGRESS_PATH) == OK:
 		level = maxi(0, int(cfg.get_value("progress", "level", 0)))
 		total_run_score = maxi(0, int(cfg.get_value("progress", "total_score", 0)))
+		tutorial_completed = bool(cfg.get_value("progress", "tutorial_completed", false))
+		if not tutorial_completed:
+			level = 0
 
 func _save_progress(saved_level: int = -1) -> void:
 	var cfg := ConfigFile.new()
@@ -90,12 +94,13 @@ func _save_progress(saved_level: int = -1) -> void:
 	cfg.set_value("progress", "total_score", total_run_score)
 	cfg.set_value("progress", "best_score", best_score)
 	cfg.set_value("progress", "last_level_score", score)
+	cfg.set_value("progress", "tutorial_completed", tutorial_completed)
 	var error := cfg.save(PROGRESS_PATH)
 	if error != OK:
 		push_warning("Could not save progress: %s" % error)
 
 func _start_run() -> void:
-	level = 0
+	level = 1 if tutorial_completed else 0
 	lives = 3
 	total_run_score = 0
 	_save_progress()
@@ -242,6 +247,8 @@ func _on_pop_ball_popped(_red_ball: RigidBody2D) -> void:
 	_save_progress()
 
 func _on_tutorial_finished() -> void:
+	tutorial_completed = true
+	_save_progress()
 	ui.set_message("Practice room: collect the pearls and reach the golden exit")
 
 func _on_gate_pressed(index: int, pressed: bool) -> void:
