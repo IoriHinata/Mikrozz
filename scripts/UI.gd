@@ -72,30 +72,47 @@ func setup(size: Vector2) -> void:
 	_build_direction_pad()
 
 func _build_direction_pad() -> void:
-	var base := Vector2(18, viewport_size.y - 154)
+	var dock := PanelContainer.new()
+	dock.position = Vector2(10, viewport_size.y - 142)
+	dock.size = Vector2(viewport_size.x - 20, 132)
+	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dock_style := StyleBoxFlat.new()
+	dock_style.bg_color = Color("#f8fbf5")
+	dock_style.border_color = Color("#bfd8c8")
+	dock_style.set_border_width_all(2)
+	dock_style.set_corner_radius_all(20)
+	dock.add_theme_stylebox_override("panel", dock_style)
+	root.add_child(dock)
+	var title := Label.new()
+	title.text = "TOUCH CONTROLS"
+	title.position = Vector2(18, viewport_size.y - 137)
+	title.add_theme_font_size_override("font_size", 9)
+	title.add_theme_color_override("font_color", Color("#82968a"))
+	root.add_child(title)
+	var base := Vector2(24, viewport_size.y - 108)
 	var specs := [
-		{"text": "↑", "offset": Vector2(42, 0), "direction": Vector2.UP},
-		{"text": "←", "offset": Vector2(0, 42), "direction": Vector2.LEFT},
-		{"text": "↓", "offset": Vector2(42, 42), "direction": Vector2.DOWN},
-		{"text": "→", "offset": Vector2(84, 42), "direction": Vector2.RIGHT}
+		{"text": "↑", "offset": Vector2(40, 0), "direction": Vector2.UP},
+		{"text": "←", "offset": Vector2(0, 38), "direction": Vector2.LEFT},
+		{"text": "↓", "offset": Vector2(40, 38), "direction": Vector2.DOWN},
+		{"text": "→", "offset": Vector2(80, 38), "direction": Vector2.RIGHT}
 	]
 	for spec in specs:
 		var button := Button.new()
 		button.text = spec.text
 		button.position = base + spec.offset
-		button.size = Vector2(40, 40)
+		button.size = Vector2(38, 36)
 		button.focus_mode = Control.FOCUS_NONE
-		button.add_theme_font_size_override("font_size", 18)
+		button.add_theme_font_size_override("font_size", 17)
 		button.add_theme_color_override("font_color", Color("#50695d"))
 		var normal := StyleBoxFlat.new()
 		normal.bg_color = Color("#d7eadf")
 		normal.border_color = Color("#9abda8")
 		normal.set_border_width_all(2)
-		normal.set_corner_radius_all(12)
+		normal.set_corner_radius_all(10)
 		button.add_theme_stylebox_override("normal", normal)
 		var pressed := StyleBoxFlat.new()
 		pressed.bg_color = Color("#8fbea2")
-		pressed.set_corner_radius_all(12)
+		pressed.set_corner_radius_all(10)
 		button.add_theme_stylebox_override("pressed", pressed)
 		var direction: Vector2 = spec.direction
 		button.button_down.connect(func(): touch_direction_changed.emit(direction))
@@ -210,8 +227,8 @@ func make_gate_buttons(count: int) -> void:
 	for i in range(count):
 		var button := Button.new()
 		button.text = "HOLD %d" % (i + 1)
-		button.position = Vector2(viewport_size.x - 112, viewport_size.y - 112 - float(i) * 84.0)
-		button.size = Vector2(94, 72)
+		button.position = Vector2(viewport_size.x - 116, viewport_size.y - 112 - float(i) * 39.0)
+		button.size = Vector2(96, 34)
 		button.focus_mode = Control.FOCUS_NONE
 		button.add_theme_font_size_override("font_size", 15)
 		button.add_theme_color_override("font_color", Color("#526d60"))
