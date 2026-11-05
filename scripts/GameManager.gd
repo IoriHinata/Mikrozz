@@ -15,6 +15,7 @@ var ui
 var level_locked := false
 var viewport_size := Vector2.ZERO
 var start_point := Vector2.ZERO
+var total_run_score := 0
 
 func _ready() -> void:
 	randomize()
@@ -30,12 +31,19 @@ func _ready() -> void:
 	ui.gate_pressed.connect(_on_gate_pressed)
 	ui.restart_requested.connect(_restart_run)
 	ui.next_level_requested.connect(_next_level)
+	ui.calibrate_requested.connect(_calibrate)
+	ui.touch_direction_changed.connect(_set_touch_direction)
+	_start_run()
+
+func _start_run() -> void:
+	level = 1
+	lives = 3
+	total_run_score = 0
 	_start_level()
 
 func _start_level() -> void:
 	level_locked = false
 	score = 0
-	lives = 3
 	_build_level()
 
 func _build_level() -> void:
@@ -52,7 +60,7 @@ func _build_level() -> void:
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	ui.hide_result()
-	ui.set_message("Tilt to roll  •  Hold matching gates open")
+	ui.set_message("Collect every pearl • Hold a gate button to pass")
 	_update_hud()
 
 func _count_coins() -> int:
@@ -81,27 +89,30 @@ func _connect_coin(coin: RigidBody2D) -> void:
 	coin.body_entered.connect(_on_coin_body.bind(coin))
 
 func _on_coin_body(body: Node, coin: Node2D) -> void:
-	if body.is_in_group("player") and is_instance_valid(coin):
+	if body.is_in_group("player") and is_instance_valid(coin) and not level_locked:
 		score += 1
+		total_run_score += 1
 		coin.queue_free()
 		_update_hud()
 		if score >= coins_total:
-			ui.set_message("All coins collected! Find the exit")
+			ui.set_message("All pearls found! Reach the golden exit")
 
 func _on_hazard_body(body: Node) -> void:
 	if body.is_in_group("player"):
 		_lose_life()
-	elif body.is_in_group("coins"):
-		body.queue_free()
 
 func _on_exit_body(body: Node) -> void:
-	if body.is_in_group("player") and not level_locked:
-		level_locked = true
-		var config := ConfigFile.new()
-		best_score = maxi(best_score, score)
-		config.set_value("records", "best_score", best_score)
-		config.save("user://records.cfg")
-		ui.show_result("MAZE CLEARED!", "Coins: %d / %d     Best: %d" % [score, coins_total, best_score], true)
+	if not body.is_in_group("player") or level_locked:
+		return
+	if score < coins_total:
+		ui.set_message("Find all %d pearls first (%d/%d)" % [coins_total, score, coins_total])
+		return
+	level_locked = true
+	best_score = maxi(best_score, total_run_score)
+	var config := ConfigFile.new()
+	config.set_value("records", "best_score", best_score)
+	config.save("user://records.cfg")
+	ui.show_result("MAZE CLEARED!", "Level %d • Run score %d • Best %d" % [level, total_run_score, best_score], true)
 
 func _lose_life() -> void:
 	if level_locked:
@@ -110,9 +121,8 @@ func _lose_life() -> void:
 	lives -= 1
 	_update_hud()
 	if lives <= 0:
-		ui.show_result("OUT OF LIVES", "Level %d  •  Coins: %d" % [level, score], false)
+		ui.show_result("OUT OF LIVES", "Run score: %d" % total_run_score, false)
 	else:
-		score = 0
 		_respawn_all.call_deferred()
 
 func _respawn_all() -> void:
@@ -128,15 +138,23 @@ func _respawn_all() -> void:
 	maze.generate(level, viewport_size)
 	start_point = maze.start_position
 	coins_total = _count_coins()
+	score = 0
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	level_locked = false
-	ui.set_message("Room reset — coins restored")
+	ui.set_message("Room reset — try another route")
 	_update_hud()
 
 func _on_gate_pressed(index: int, pressed: bool) -> void:
 	if is_instance_valid(maze):
 		maze.set_gate_open(index, pressed)
+
+func _calibrate() -> void:
+	tilt.calibrate()
+	ui.set_message("Tilt calibrated • hold phone flat")
+
+func _set_touch_direction(direction: Vector2) -> void:
+	tilt.set_touch_direction(direction)
 
 func _update_hud() -> void:
 	ui.set_hud(level, lives, score, coins_total)
@@ -146,5 +164,4 @@ func _next_level() -> void:
 	_start_level()
 
 func _restart_run() -> void:
-	level = 1
-	_start_level()
+	_start_run()
