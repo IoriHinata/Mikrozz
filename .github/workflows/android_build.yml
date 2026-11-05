@@ -86,6 +86,16 @@ jobs:
           "$GODOT_BIN" --headless --editor --path "$GITHUB_WORKSPACE" --import
           "$GODOT_BIN" --headless --editor --path "$GITHUB_WORKSPACE" --quit
 
+      - name: Run headless gameplay smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --quit-after 120 2>&1 | tee runtime-smoke.log
+          if grep -E "SCRIPT ERROR|Parse Error|ERROR:" runtime-smoke.log; then
+            echo "Godot runtime smoke test reported errors"
+            exit 1
+          fi
+
       - name: Export debug APK
         run: |
           mkdir -p build
