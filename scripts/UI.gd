@@ -8,6 +8,10 @@ signal calibrate_requested
 signal touch_direction_changed(direction: Vector2)
 signal settings_changed(key: String, value: Variant)
 signal settings_pause_changed(paused: bool)
+signal tutorial_finished
+var tutorial_panel: PanelContainer
+var tutorial_page := 0
+const TUTORIAL_PAGES := [["WELCOME TO MIKROZZ", "Guide the pearl through the maze by gently tilting your phone. This short training room teaches the controls."], ["CALIBRATE YOUR PHONE", "Place your phone flat and still, then tap CALIBRATE. The sensor indicator at the top shows whether tilt control is active."], ["MOVE AND STEER", "Tilt the phone slowly in the direction you want the ball to roll. Small movements are enough; avoid sudden shakes. The arrows in the bottom panel are a touch-control fallback."], ["USE YOUR FINGERS", "Hold gate buttons in the bottom panel while steering. Later levels require holding more than one button at once, so use several fingers and plan your grip."], ["PUZZLES AND RED ORBS", "Roll over glowing floor plates to activate puzzle mechanisms. Red orbs emerge from spawners: tap each red orb to pop it before it gets in your way. Collect every pearl, then reach the golden exit."]]
 
 var root: Control
 var hud_label: Label
@@ -119,6 +123,67 @@ func _build_direction_pad() -> void:
 		button.button_up.connect(func(): touch_direction_changed.emit(Vector2.ZERO))
 		root.add_child(button)
 		direction_buttons.append(button)
+
+func show_tutorial() -> void:
+	if is_instance_valid(tutorial_panel):
+		tutorial_panel.queue_free()
+	tutorial_page = 0
+	settings_pause_changed.emit(true)
+	tutorial_panel = PanelContainer.new()
+	tutorial_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	tutorial_panel.position = Vector2(-viewport_size.x * 0.43, -150)
+	tutorial_panel.size = Vector2(viewport_size.x * 0.86, 300)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#fffaf0")
+	style.border_color = Color("#bfd8c8")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(22)
+	tutorial_panel.add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	tutorial_panel.add_child(box)
+	var heading := Label.new()
+	heading.name = "TutorialHeading"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 22)
+	heading.add_theme_color_override("font_color", Color("#587565"))
+	box.add_child(heading)
+	var body := Label.new()
+	body.name = "TutorialBody"
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(viewport_size.x * 0.78, 145)
+	body.add_theme_font_size_override("font_size", 15)
+	body.add_theme_color_override("font_color", Color("#61796b"))
+	box.add_child(body)
+	var next := Button.new()
+	next.name = "TutorialNext"
+	next.custom_minimum_size = Vector2(180, 44)
+	next.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	next.pressed.connect(_advance_tutorial)
+	box.add_child(next)
+	root.add_child(tutorial_panel)
+	_update_tutorial_page()
+
+func _update_tutorial_page() -> void:
+	if not is_instance_valid(tutorial_panel):
+		return
+	var box := tutorial_panel.get_child(0)
+	box.get_node("TutorialHeading").text = TUTORIAL_PAGES[tutorial_page][0]
+	box.get_node("TutorialBody").text = TUTORIAL_PAGES[tutorial_page][1]
+	box.get_node("TutorialNext").text = "NEXT" if tutorial_page < TUTORIAL_PAGES.size() - 1 else "START PRACTICE"
+
+func _advance_tutorial() -> void:
+	if tutorial_page < TUTORIAL_PAGES.size() - 1:
+		tutorial_page += 1
+		_update_tutorial_page()
+		return
+	if is_instance_valid(tutorial_panel):
+		tutorial_panel.queue_free()
+	tutorial_panel = null
+	settings_pause_changed.emit(false)
+	tutorial_finished.emit()
 
 func set_settings_defaults(music: float, sfx: float, sensitivity: float, vibration: bool) -> void:
 	current_music = music
