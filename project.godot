@@ -24,3 +24,9 @@ textures/vram_compression/import_etc2_astc=true
 [physics]
 2d/default_gravity=0.0
 2d/default_gravity_vector=Vector2(0, 1)
+
+[input_devices]
+
+[input_devices/sensors]
+enable_accelerometer=true
+enable_gravity=true
