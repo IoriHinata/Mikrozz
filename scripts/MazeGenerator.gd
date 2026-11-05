@@ -146,7 +146,7 @@ func _build_geometry(level_number: int) -> void:
 			var a: Vector2i = solution[i - 1]
 			var b: Vector2i = solution[i]
 			candidates.append({"a": a, "b": b, "position": (_cell_center(a) + _cell_center(b)) * 0.5})
-	var gate_limit := mini(3, 1 + int(maxi(0, level_number - 1) / 3))
+	var gate_limit := 1 if level_number == 0 else mini(3, 1 + int(maxi(0, level_number - 1) / 2))
 	for i in range(mini(candidates.size(), gate_limit)):
 		var edge: Dictionary = candidates[i]
 		gate_edges[_edge_key(edge.a, edge.b)] = edge
@@ -181,7 +181,7 @@ func _build_objects(level_number: int) -> void:
 	for y in range(rows):
 		for x in range(cols):
 			var cell := Vector2i(x, y)
-			if cell not in solution and cell != Vector2i.ZERO and cell != Vector2i(cols - 1, rows - 1):
+			if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
 				candidates.append(cell)
 	candidates.shuffle()
 	for i in range(mini(hazard_count, candidates.size())):
