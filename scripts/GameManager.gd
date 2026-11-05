@@ -31,6 +31,9 @@ func _ready() -> void:
 	ui.gate_pressed.connect(_on_gate_pressed)
 	ui.restart_requested.connect(_restart_run)
 	ui.next_level_requested.connect(_next_level)
+	ui.calibrate_requested.connect(_calibrate_tilt)
+	ui.touch_direction_changed.connect(_set_touch_direction)
+	tilt.sensor_status_changed.connect(_on_sensor_status)
 	_start_run()
 
 func _start_run() -> void:
@@ -156,3 +159,13 @@ func _next_level() -> void:
 
 func _restart_run() -> void:
 	_start_run()
+
+func _calibrate_tilt() -> void:
+	tilt.calibrate()
+	ui.set_message("Tilt calibrated — keep phone level for a moment")
+
+func _set_touch_direction(direction: Vector2) -> void:
+	tilt.set_touch_direction(direction)
+
+func _on_sensor_status(available: bool, magnitude: float) -> void:
+	ui.set_sensor_status(available, magnitude)
