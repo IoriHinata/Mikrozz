@@ -37,7 +37,6 @@ func _ready() -> void:
 func _start_level() -> void:
 	level_locked = false
 	score = 0
-	lives = 3
 	_build_level()
 
 func _build_level() -> void:
@@ -45,15 +44,13 @@ func _build_level() -> void:
 		maze.queue_free()
 	maze = MazeScript.new()
 	add_child(maze)
-	maze.generate(level, viewport_size)
-	start_point = maze.start_position
-	coins_total = 0
-	for child in maze.get_children():
-		if child is MikrozzCoin:
-			coins_total += 1
+	# Connect before generate(): generation emits these signals synchronously.
 	maze.hazard_created.connect(_connect_hazard)
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
+	maze.generate(level, viewport_size)
+	start_point = maze.start_position
+	coins_total = maze.get_tree().get_nodes_in_group("coins").size()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	ui.hide_result()
@@ -107,6 +104,10 @@ func _lose_life() -> void:
 	lives -= 1
 	_update_hud()
 	if lives <= 0:
+		best_score = maxi(best_score, score)
+		var config := ConfigFile.new()
+		config.set_value("records", "best_score", best_score)
+		config.save("user://records.cfg")
 		ui.show_result("OUT OF LIVES", "Level %d  •  Coins: %d" % [level, score], false)
 	else:
 		_respawn_all.call_deferred()
@@ -121,15 +122,13 @@ func _build_level_preserving_lives() -> void:
 		maze.queue_free()
 	maze = MazeScript.new()
 	add_child(maze)
-	maze.generate(level, viewport_size)
-	start_point = maze.start_position
-	coins_total = 0
-	for child in maze.get_children():
-		if child is MikrozzCoin:
-			coins_total += 1
+	# Reconnect before procedural generation so no object signal is missed.
 	maze.hazard_created.connect(_connect_hazard)
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
+	maze.generate(level, viewport_size)
+	start_point = maze.start_position
+	coins_total = maze.get_tree().get_nodes_in_group("coins").size()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	level_locked = false
@@ -149,4 +148,5 @@ func _next_level() -> void:
 
 func _restart_run() -> void:
 	level = 1
+	lives = 3
 	_start_level()
