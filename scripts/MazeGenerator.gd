@@ -4,6 +4,14 @@ class_name MazeGenerator
 signal coin_body_created(coin: RigidBody2D)
 signal hazard_created(hazard: Area2D)
 signal exit_created(exit_area: Area2D)
+signal pressure_button_created(button: Area2D)
+signal pop_ball_created(ball: RigidBody2D)
+signal pop_ball_popped(ball: RigidBody2D)
+signal pressure_button_activated(index: int)
+
+var pop_timer: Timer
+var active_level := 1
+var pop_spawn_cells: Array[Vector2i] = []
 
 const CoinScript = preload("res://scripts/Coin.gd")
 const PALETTES := [
@@ -44,6 +52,7 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 	origin = Vector2((viewport_size.x - board_size.x) * 0.5, 92.0 + (usable.y - board_size.y) * 0.5)
 	board_rect = Rect2(origin, board_size)
 	palette = PALETTES[posmod(maxi(0, level_number), PALETTES.size())]
+	active_level = level_number
 	shape_id = 0 if level_number <= 0 else posmod(level_number - 1, 4)
 	_build_cells()
 	_build_solution()
@@ -179,6 +188,42 @@ func _build_objects(level_number: int) -> void:
 		var hazard := _make_hazard(_cell_center(candidates[i]), cell_size * 0.20, i % 2 == 0)
 		add_child(hazard)
 		hazard_created.emit(hazard)
+
+	# Pressure plates are optional puzzle controls. The ball activates them by rolling over.
+	if level_number >= 2:
+		var plate_cells: Array[Vector2i] = []
+		for y in range(rows):
+			for x in range(cols):
+				var candidate := Vector2i(x, y)
+				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell:
+					plate_cells.append(candidate)
+		plate_cells.shuffle()
+		var plate_count := mini(2, 1 + int(level_number / 6))
+		for i in range(mini(plate_count, plate_cells.size())):
+			var plate := PressurePlate.new()
+			plate.position = _cell_center(plate_cells[i])
+			plate.plate_index = i
+			add_child(plate)
+			plate.activated.connect(func(index: int): pressure_button_activated.emit(index))
+			pressure_button_created.emit(plate)
+	# A visible spawner periodically releases red bonus orbs. Tap them to pop them.
+	if level_number >= 2:
+		pop_spawn_cells.clear()
+		for y in range(rows):
+			for x in range(cols):
+				var candidate := Vector2i(x, y)
+				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell:
+					pop_spawn_cells.append(candidate)
+		pop_spawn_cells.shuffle()
+		if not pop_spawn_cells.is_empty():
+			var spawner := PopSpawnerVisual.new()
+			spawner.position = _cell_center(pop_spawn_cells[0])
+			add_child(spawner)
+			pop_timer = Timer.new()
+			pop_timer.wait_time = maxf(2.8, 6.0 - float(level_number) * 0.12)
+			pop_timer.autostart = true
+			pop_timer.timeout.connect(_spawn_pop_ball)
+			add_child(pop_timer)
 	var exit_area := Area2D.new()
 	exit_area.name = "Exit"
 	exit_area.add_to_group("exit")
@@ -190,6 +235,17 @@ func _build_objects(level_number: int) -> void:
 	exit_area.add_child(exit_collision)
 	add_child(exit_area)
 	exit_created.emit(exit_area)
+
+func _spawn_pop_ball() -> void:
+	if pop_spawn_cells.is_empty() or not is_inside_tree():
+		return
+	var cell: Vector2i = pop_spawn_cells.pick_random()
+	var red_ball := RedPopBall.new()
+	red_ball.position = _cell_center(cell)
+	red_ball.linear_velocity = Vector2(randf_range(-45.0, 45.0), randf_range(-45.0, 45.0))
+	add_child(red_ball)
+	red_ball.popped.connect(func(): pop_ball_popped.emit(red_ball))
+	pop_ball_created.emit(red_ball)
 
 func _make_hazard(at: Vector2, radius: float, spikes: bool) -> Area2D:
 	var area := Area2D.new()
@@ -318,3 +374,62 @@ class GateVisual:
 	func _draw() -> void:
 		draw_rect(Rect2(-size * 0.5, size), color.darkened(0.18), true, true, 3.0)
 		draw_rect(Rect2(-size * 0.5 + Vector2(2, 2), size - Vector2(4, 4)), color, true, true, 2.0)
+
+
+class PressurePlate:
+	extends Area2D
+	signal activated(index: int)
+	var plate_index := 0
+	var triggered := false
+	func _ready() -> void:
+		var shape := CircleShape2D.new()
+		shape.radius = 13.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_body_entered)
+		queue_redraw()
+	func _on_body_entered(body: Node) -> void:
+		if triggered or not body.is_in_group("player"):
+			return
+		triggered = true
+		activated.emit(plate_index)
+		queue_redraw()
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 13.0, Color("#d9b7e8") if not triggered else Color("#9bd6b0"))
+		draw_circle(Vector2.ZERO, 7.0, Color("#fff8ff"))
+
+class PopSpawnerVisual:
+	extends Node2D
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 12.0, Color("#59616d"))
+		draw_circle(Vector2.ZERO, 7.0, Color("#ef7880"))
+		draw_arc(Vector2.ZERO, 15.0, 0.0, TAU, 32, Color("#8c98a5"), 3.0)
+
+class RedPopBall:
+	extends RigidBody2D
+	signal popped
+	func _ready() -> void:
+		add_to_group("pop_balls")
+		gravity_scale = 0.0
+		mass = 0.25
+		linear_damp = 1.2
+		continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
+		input_pickable = true
+		var shape := CircleShape2D.new()
+		shape.radius = 10.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		input_event.connect(_on_input_event)
+		queue_redraw()
+	func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+		var tapped := event is InputEventScreenTouch and event.pressed
+		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+		if tapped:
+			popped.emit()
+			queue_free()
+	func _draw() -> void:
+		draw_circle(Vector2(0, 2), 11.0, Color("#8e3d48"))
+		draw_circle(Vector2.ZERO, 9.5, Color("#f05e68"))
+		draw_circle(Vector2(-3.0, -3.0), 2.5, Color("#ffd8d9"))
