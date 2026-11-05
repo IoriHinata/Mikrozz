@@ -81,7 +81,8 @@ func _build_solution() -> void:
 	var start := Vector2i.ZERO
 	var target := Vector2i(cols - 1, rows - 1)
 	var queue: Array[Vector2i] = [start]
-	var previous: Dictionary = {start: Vector2i(-1, -1)}
+	var previous: Dictionary = {}
+	previous[start] = Vector2i(-1, -1)
 	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 	while not queue.is_empty():
 		var current: Vector2i = queue.pop_front()
