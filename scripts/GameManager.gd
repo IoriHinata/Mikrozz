@@ -7,7 +7,7 @@ const AudioScript = preload("res://scripts/AudioManager.gd")
 const PROGRESS_PATH := "user://progress.cfg"
 const SETTINGS_PATH := "user://settings.cfg"
 
-var level := 1
+var level := 0
 var lives := 3
 var score := 0
 var coins_total := 0
@@ -95,7 +95,7 @@ func _save_progress(saved_level: int = -1) -> void:
 		push_warning("Could not save progress: %s" % error)
 
 func _start_run() -> void:
-	level = 1
+	level = 0
 	lives = 3
 	total_run_score = 0
 	_save_progress()
