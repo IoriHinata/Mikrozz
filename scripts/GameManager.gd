@@ -232,11 +232,22 @@ func _on_pressure_button_activated(index: int) -> void:
 	if not is_instance_valid(maze):
 		return
 	total_run_score += 3
-	ui.set_message("Bonus plate %d activated! +3 points" % (index + 1))
+	for hazard in maze.get_children():
+		if hazard is Area2D and hazard.is_in_group("hazard"):
+			hazard.set_deferred("monitoring", false)
+	get_tree().create_timer(4.0).timeout.connect(_restore_hazards)
+	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
 	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
 		Input.vibrate_handheld(45)
 	_save_progress()
+
+func _restore_hazards() -> void:
+	if not is_instance_valid(maze):
+		return
+	for hazard in maze.get_children():
+		if hazard is Area2D and hazard.is_in_group("hazard"):
+			hazard.set_deferred("monitoring", true)
 
 func _on_pop_ball_popped(_red_ball: RigidBody2D) -> void:
 	total_run_score += 2
