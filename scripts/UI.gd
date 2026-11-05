@@ -291,11 +291,11 @@ func make_gate_buttons(count: int) -> void:
 	gate_buttons.clear()
 	for i in range(count):
 		var button := Button.new()
-		button.text = "HOLD %d" % (i + 1)
-		button.position = Vector2(viewport_size.x - 116, viewport_size.y - 112 - float(i) * 39.0)
-		button.size = Vector2(96, 34)
+		button.text = "G%d" % (i + 1)
+		button.position = Vector2(viewport_size.x - 18.0 - float(i + 1) * 60.0, viewport_size.y - 105)
+		button.size = Vector2(54, 42)
 		button.focus_mode = Control.FOCUS_NONE
-		button.add_theme_font_size_override("font_size", 15)
+		button.add_theme_font_size_override("font_size", 12)
 		button.add_theme_color_override("font_color", Color("#526d60"))
 		var normal := StyleBoxFlat.new()
 		normal.bg_color = Color("#c7e1d1")
