@@ -20,6 +20,10 @@ var settings_panel: PanelContainer
 var settings_overlay: ColorRect
 var viewport_size := Vector2.ZERO
 var settings_open := false
+var current_music := 0.32
+var current_sfx := 0.75
+var current_sensitivity := 1.65
+var current_vibration := true
 
 func setup(size: Vector2) -> void:
 	viewport_size = size
@@ -63,7 +67,7 @@ func setup(size: Vector2) -> void:
 	settings_button.size = Vector2(42, 36)
 	settings_button.focus_mode = Control.FOCUS_NONE
 	settings_button.add_theme_font_size_override("font_size", 22)
-	settings_button.pressed.connect(open_settings.bind(0.32, 0.75, 1.65, true))
+	settings_button.pressed.connect(func(): open_settings(current_music, current_sfx, current_sensitivity, current_vibration))
 	root.add_child(settings_button)
 	_build_direction_pad()
 
@@ -98,6 +102,12 @@ func _build_direction_pad() -> void:
 		button.button_up.connect(func(): touch_direction_changed.emit(Vector2.ZERO))
 		root.add_child(button)
 		direction_buttons.append(button)
+
+func set_settings_defaults(music: float, sfx: float, sensitivity: float, vibration: bool) -> void:
+	current_music = music
+	current_sfx = sfx
+	current_sensitivity = sensitivity
+	current_vibration = vibration
 
 func open_settings(music: float, sfx: float, sensitivity: float, vibration: bool) -> void:
 	if settings_open:
