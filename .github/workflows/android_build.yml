@@ -63,8 +63,8 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
           unzip -q templates.tpz -d templates
-          TEMPLATE_DIR="$(find templates -type d -name '*templates*' | head -n 1)"
-          cp -a "$TEMPLATE_DIR/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          test -d templates/templates
+          cp -a templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
 
       - name: Configure Android SDK for Godot
         shell: bash
