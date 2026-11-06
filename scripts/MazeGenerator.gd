@@ -460,10 +460,18 @@ func activate_sequence_plate(index: int) -> void:
 		if sequence_next >= 3:
 			level_mechanic_event.emit("Sequence solved! +12", 12)
 			sequence_next = 0
+			for child in get_children():
+				if child is SequencePlate:
+					child.triggered = false
+					child.queue_redraw()
 		else:
 			level_mechanic_event.emit("Correct plate %d/3" % sequence_next, 0)
 	else:
 		sequence_next = 0
+		for child in get_children():
+			if child is SequencePlate:
+				child.triggered = false
+				child.queue_redraw()
 		level_mechanic_event.emit("Wrong order — sequence reset", 0)
 
 
@@ -564,13 +572,13 @@ class PortalPad:
 		body_entered.connect(_on_enter)
 		queue_redraw()
 	func _on_enter(body: Node) -> void:
-		if not body.is_in_group("player") or cooldown:
+		if not body.is_in_group("player") or body.get_meta("portal_cooldown", false):
 			return
-		cooldown = true
+		body.set_meta("portal_cooldown", true)
 		body.global_position = destination
 		if body is RigidBody2D:
 			body.linear_velocity = body.linear_velocity.rotated(0.25)
-		get_tree().create_timer(0.8).timeout.connect(func(): cooldown = false)
+		get_tree().create_timer(0.8).timeout.connect(func(): if is_instance_valid(body) and body.has_meta("portal_cooldown"): body.remove_meta("portal_cooldown"))
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 13.0, Color("#8f8ee5"))
 		draw_circle(Vector2.ZERO, 8.0, Color("#dcdcff"))
