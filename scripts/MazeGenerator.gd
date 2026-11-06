@@ -37,6 +37,12 @@ var wall_count := 0
 var shape_id := 0
 var start_cell := Vector2i.ZERO
 var target_cell := Vector2i.ZERO
+var reveal_position := Vector2(-10000.0, -10000.0)
+var sequence_next := 0
+var special_mechanic_count := 0
+
+signal level_mechanic_event(message: String, points: int)
+signal boss_defeated
 
 func generate(level_number: int, viewport_size: Vector2) -> void:
 	for child in get_children():
@@ -226,6 +232,112 @@ func _build_objects(level_number: int) -> void:
 			pop_timer.autostart = true
 			pop_timer.timeout.connect(_spawn_pop_ball)
 			add_child(pop_timer)
+func _process(_delta: float) -> void:
+	if active_level >= 9:
+		var players := get_tree().get_nodes_in_group("player")
+		if not players.is_empty() and is_instance_valid(players[0]):
+			reveal_position = players[0].global_position
+			queue_redraw()
+
+func _build_special_mechanics(level_number: int) -> void:
+	sequence_next = 0
+	special_mechanic_count = 0
+	if level_number >= 1 and solution.size() > 5:
+		var surface_index := clampi(int(solution.size() * 0.42), 2, solution.size() - 3)
+		var surface := SurfaceZone.new()
+		surface.mode = ["ice", "sand", "conveyor", "sticky", "ice"][posmod(level_number - 1, 5)]
+		surface.position = _cell_center(solution[surface_index])
+		surface.size_radius = cell_size * 0.34
+		add_child(surface)
+		special_mechanic_count += 1
+	if level_number >= 2:
+		var branches: Array[Vector2i] = []
+		for y in range(rows):
+			for x in range(cols):
+				var cell := Vector2i(x, y)
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+					branches.append(cell)
+		if branches.size() >= 2:
+			branches.shuffle()
+			var portal_a := PortalPad.new()
+			var portal_b := PortalPad.new()
+			portal_a.position = _cell_center(branches[0])
+			portal_b.position = _cell_center(branches[1])
+			portal_a.destination = portal_b.position
+			portal_b.destination = portal_a.position
+			add_child(portal_a)
+			add_child(portal_b)
+			special_mechanic_count += 1
+	if level_number >= 3 and solution.size() > 6:
+		var conveyor := ConveyorZone.new()
+		conveyor.position = _cell_center(solution[clampi(int(solution.size() * 0.32), 2, solution.size() - 3)])
+		conveyor.direction = Vector2.RIGHT if level_number % 2 == 1 else Vector2.LEFT
+		add_child(conveyor)
+		special_mechanic_count += 1
+	if level_number >= 4 and solution.size() > 7:
+		var spring := SpringPad.new()
+		spring.position = _cell_center(solution[clampi(int(solution.size() * 0.58), 2, solution.size() - 3)])
+		spring.kick_direction = Vector2.UP if level_number % 2 == 0 else Vector2.RIGHT
+		add_child(spring)
+		special_mechanic_count += 1
+	if level_number >= 5 and solution.size() > 8:
+		var barrier := MovingBarrier.new()
+		barrier.position = _cell_center(solution[clampi(int(solution.size() * 0.72), 2, solution.size() - 3)])
+		barrier.travel = cell_size * 0.22
+		barrier.speed = 1.25 + float(level_number) * 0.04
+		barrier.barrier_size = Vector2(cell_size * 0.42, 9.0)
+		add_child(barrier)
+		special_mechanic_count += 1
+	if level_number >= 6:
+		var magnet := MagnetField.new()
+		magnet.position = _cell_center(solution[clampi(int(solution.size() * 0.50), 2, solution.size() - 3)])
+		magnet.radius = cell_size * 2.0
+		magnet.strength = 170.0
+		add_child(magnet)
+		special_mechanic_count += 1
+	if level_number >= 7:
+		var laser_cells: Array[Vector2i] = []
+		for y in range(rows):
+			for x in range(cols):
+				var cell := Vector2i(x, y)
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+					laser_cells.append(cell)
+		if not laser_cells.is_empty():
+			laser_cells.shuffle()
+			var laser := LaserHazard.new()
+			laser.position = _cell_center(laser_cells[0])
+			add_child(laser)
+			hazard_created.emit(laser)
+			special_mechanic_count += 1
+	if level_number >= 8 and solution.size() > 8:
+		for i in range(3):
+			var plate := SequencePlate.new()
+			plate.plate_index = i
+			plate.position = _cell_center(solution[clampi(int(solution.size() * float(i + 1) / 4.0), 2, solution.size() - 3)])
+			plate.sequence_owner = self
+			add_child(plate)
+		special_mechanic_count += 1
+	if level_number >= 10:
+		var boss := BossOrb.new()
+		boss.position = _cell_center(solution[clampi(int(solution.size() * 0.68), 2, solution.size() - 3)])
+		add_child(boss)
+		hazard_created.emit(boss)
+		boss.defeated.connect(func(): boss_defeated.emit())
+		special_mechanic_count += 1
+
+func activate_sequence_plate(index: int) -> void:
+	if index == sequence_next:
+		sequence_next += 1
+		if sequence_next >= 3:
+			level_mechanic_event.emit("Sequence solved! +12", 12)
+			sequence_next = 0
+		else:
+			level_mechanic_event.emit("Correct plate %d/3" % sequence_next, 0)
+	else:
+		sequence_next = 0
+		level_mechanic_event.emit("Wrong order — sequence reset", 0)
+
+	_build_special_mechanics(level_number)
 	var exit_area := Area2D.new()
 	exit_area.name = "Exit"
 	exit_area.add_to_group("exit")
@@ -241,7 +353,20 @@ func _build_objects(level_number: int) -> void:
 func _spawn_pop_ball() -> void:
 	if pop_spawn_cells.is_empty() or not is_inside_tree():
 		return
+	var existing_orbs := get_tree().get_nodes_in_group("pop_balls")
+	if existing_orbs.size() >= 3:
+		return
 	var red_ball := RedPopBall.new()
+	var roll := randf()
+	if roll < 0.08:
+		red_ball.orb_type = "gold"
+		red_ball.score_value = 10
+	elif roll < 0.22:
+		red_ball.orb_type = "boost"
+		red_ball.score_value = 4
+	elif roll < 0.32:
+		red_ball.orb_type = "volatile"
+		red_ball.score_value = 5
 	red_ball.position = pop_spawner_position
 	red_ball.linear_velocity = Vector2(randf_range(-45.0, 45.0), randf_range(-45.0, 45.0))
 	add_child(red_ball)
@@ -319,6 +444,9 @@ func _draw() -> void:
 	for y in range(rows):
 		for x in range(cols):
 			if not cells[y][x]["inside"]:
+				continue
+			var cell_position := _cell_center(Vector2i(x, y))
+			if active_level >= 9 and cell_position.distance_to(reveal_position) > cell_size * 2.35:
 				continue
 			var rect := Rect2(origin + Vector2(x * cell_size + 1, y * cell_size + 1), Vector2(cell_size - 2, cell_size - 2))
 			draw_rect(rect, palette.floor.lightened(0.02), true)
@@ -407,6 +535,242 @@ class PopSpawnerVisual:
 		draw_circle(Vector2.ZERO, 7.0, Color("#ef7880"))
 		draw_arc(Vector2.ZERO, 15.0, 0.0, TAU, 32, Color("#8c98a5"), 3.0)
 
+
+
+class SurfaceZone:
+	extends Area2D
+	var mode := "ice"
+	var size_radius := 14.0
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 1
+		var shape := CircleShape2D.new()
+		shape.radius = size_radius
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_enter)
+		body_exited.connect(_on_exit)
+		queue_redraw()
+	func _on_enter(body: Node) -> void:
+		if body.is_in_group("player"):
+			body.set_meta("surface_mode", mode)
+	func _on_exit(body: Node) -> void:
+		if body.is_in_group("player") and body.has_meta("surface_mode"):
+			body.remove_meta("surface_mode")
+	func _draw() -> void:
+		var tint := Color("#a9dff0") if mode == "ice" else Color("#d8c29a") if mode == "sand" else Color("#a9d9b5")
+		draw_circle(Vector2.ZERO, size_radius, tint)
+		draw_arc(Vector2.ZERO, size_radius - 3.0, 0.0, TAU, 32, Color.WHITE, 2.0)
+
+class PortalPad:
+	extends Area2D
+	var destination := Vector2.ZERO
+	var cooldown := false
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 1
+		var shape := CircleShape2D.new()
+		shape.radius = 13.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_enter)
+		queue_redraw()
+	func _on_enter(body: Node) -> void:
+		if not body.is_in_group("player") or cooldown:
+			return
+		cooldown = true
+		body.global_position = destination
+		if body is RigidBody2D:
+			body.linear_velocity = body.linear_velocity.rotated(0.25)
+		get_tree().create_timer(0.8).timeout.connect(func(): cooldown = false)
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 13.0, Color("#8f8ee5"))
+		draw_circle(Vector2.ZERO, 8.0, Color("#dcdcff"))
+		draw_arc(Vector2.ZERO, 16.0, 0.0, TAU, 32, Color("#aaa7ff"), 3.0)
+
+class ConveyorZone:
+	extends Area2D
+	var direction := Vector2.RIGHT
+	var active_body: RigidBody2D
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 1
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(30.0, 22.0)
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(func(body: Node): if body is RigidBody2D and body.is_in_group("player"): active_body = body)
+		body_exited.connect(func(body: Node): if body == active_body: active_body = null)
+		queue_redraw()
+	func _physics_process(_delta: float) -> void:
+		if is_instance_valid(active_body):
+			active_body.apply_central_force(direction * 185.0)
+	func _draw() -> void:
+		draw_rect(Rect2(-15, -11, 30, 22), Color("#e7c77f"), true)
+		for x in [-8.0, 0.0, 8.0]:
+			draw_line(Vector2(x - 3.0, 0), Vector2(x + 3.0, 0), Color("#fff4d4"), 2.0)
+
+class SpringPad:
+	extends Area2D
+	var kick_direction := Vector2.UP
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 1
+		var shape := CircleShape2D.new()
+		shape.radius = 12.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_enter)
+		queue_redraw()
+	func _on_enter(body: Node) -> void:
+		if body is RigidBody2D and body.is_in_group("player"):
+			body.apply_central_impulse(kick_direction.normalized() * 220.0)
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 12.0, Color("#edb17c"))
+		draw_line(Vector2(-7, 3), Vector2(0, -5), Color.WHITE, 3.0)
+		draw_line(Vector2(0, -5), Vector2(7, 3), Color.WHITE, 3.0)
+
+class MovingBarrier:
+	extends AnimatableBody2D
+	var travel := 8.0
+	var speed := 1.0
+	var barrier_size := Vector2(18.0, 8.0)
+	var elapsed := 0.0
+	func _ready() -> void:
+		sync_to_physics = true
+		var shape := RectangleShape2D.new()
+		shape.size = barrier_size
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		queue_redraw()
+	func _physics_process(delta: float) -> void:
+		elapsed += delta
+		position.x += 0.0
+		position = Vector2(position.x, position.y + sin(elapsed * speed) * travel * delta)
+	func _draw() -> void:
+		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#b87985"), true, true, 2.0)
+
+class MagnetField:
+	extends Node2D
+	var radius := 70.0
+	var strength := 170.0
+	func _physics_process(_delta: float) -> void:
+		for player in get_tree().get_nodes_in_group("player"):
+			if not is_instance_valid(player) or not player is RigidBody2D:
+				continue
+			var offset: Vector2 = global_position - player.global_position
+			var distance := offset.length()
+			if distance > 1.0 and distance < radius:
+				(player as RigidBody2D).apply_central_force(offset.normalized() * strength * (1.0 - distance / radius))
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, radius, Color(0.42, 0.58, 0.88, 0.10))
+		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color("#8da9df"), 1.5)
+
+class LaserHazard:
+	extends Area2D
+	var active := false
+	var pulse_timer: Timer
+	func _ready() -> void:
+		add_to_group("hazard")
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(28.0, 12.0)
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		monitoring = false
+		pulse_timer = Timer.new()
+		pulse_timer.wait_time = 1.35
+		pulse_timer.autostart = true
+		pulse_timer.timeout.connect(_toggle)
+		add_child(pulse_timer)
+		queue_redraw()
+	func _toggle() -> void:
+		active = not active
+		monitoring = active
+		queue_redraw()
+	func _draw() -> void:
+		draw_rect(Rect2(-14, -6, 28, 12), Color("#e9d6dc"), true)
+		if active:
+			draw_line(Vector2(-14, 0), Vector2(14, 0), Color("#ef5365"), 4.0)
+		else:
+			draw_circle(Vector2.ZERO, 3.0, Color("#9aa7a0"))
+
+class SequencePlate:
+	extends Area2D
+	var plate_index := 0
+	var sequence_owner: Node
+	var triggered := false
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 1
+		var shape := CircleShape2D.new()
+		shape.radius = 11.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_enter)
+		queue_redraw()
+	func _on_enter(body: Node) -> void:
+		if not body.is_in_group("player") or triggered:
+			return
+		triggered = true
+		if is_instance_valid(sequence_owner):
+			sequence_owner.activate_sequence_plate(plate_index)
+		queue_redraw()
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 11.0, Color("#d3b5eb") if not triggered else Color("#9bd6b0"))
+		draw_string(ThemeDB.fallback_font, Vector2(-3, 4), str(plate_index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#59466d"))
+
+class BossOrb:
+	extends Area2D
+	signal defeated
+	var health := 3
+	var target: Node2D
+	var elapsed := 0.0
+	func _ready() -> void:
+		add_to_group("hazard")
+		input_pickable = true
+		var shape := CircleShape2D.new()
+		shape.radius = 17.0
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		body_entered.connect(_on_body)
+		input_event.connect(_on_input)
+		queue_redraw()
+	func _physics_process(delta: float) -> void:
+		elapsed += delta
+		if not is_instance_valid(target):
+			var players := get_tree().get_nodes_in_group("player")
+			if not players.is_empty():
+				target = players[0] as Node2D
+		if is_instance_valid(target):
+			global_position = global_position.move_toward(target.global_position, 24.0 * delta)
+	func _on_body(body: Node) -> void:
+		if body.is_in_group("player"):
+			body.apply_central_impulse((body.global_position - global_position).normalized() * 100.0)
+	func _on_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+		var tapped: bool = event is InputEventScreenTouch and event.pressed
+		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+		if not tapped:
+			return
+		health -= 1
+		if health <= 0:
+			defeated.emit()
+			queue_free()
+		else:
+			queue_redraw()
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 17.0, Color("#8d3f65"))
+		draw_circle(Vector2.ZERO, 13.0, Color("#e65d83"))
+		for i in range(health):
+			draw_circle(Vector2(-5.0 + float(i) * 5.0, 21.0), 2.0, Color("#ffe5ed"))
+
 class RedPopBall:
 	extends RigidBody2D
 	signal popped
@@ -425,12 +789,14 @@ class RedPopBall:
 		input_event.connect(_on_input_event)
 		queue_redraw()
 	func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-		var tapped: bool = event is InputEventScreenTouch and event.pressed
-		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
-		if tapped:
-			popped.emit()
-			queue_free()
+		var orb_type := "normal"
+	var score_value := 2
+	var tapped_once := false
+	var tapped: bool = false
+	func _input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+		_on_input_event(_viewport, event, _shape_idx)
 	func _draw() -> void:
+		var orb_color := Color("#efbd5b") if orb_type == "gold" else Color("#74bfe5") if orb_type == "boost" else Color("#f05e68")
 		draw_circle(Vector2(0, 2), 11.0, Color("#8e3d48"))
-		draw_circle(Vector2.ZERO, 9.5, Color("#f05e68"))
-		draw_circle(Vector2(-3.0, -3.0), 2.5, Color("#ffd8d9"))
+		draw_circle(Vector2.ZERO, 9.5, orb_color)
+		draw_circle(Vector2(-3.0, -3.0), 2.5, Color("#fff1d8"))
