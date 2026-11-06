@@ -216,10 +216,12 @@ jobs:
               root.add_child(verifier)
               verifier.generate(level, Vector2(480, 854), 710000 + level)
               assert(generator.solution == verifier.solution, "Seed is not deterministic at level %d" % level)
+              var tested_cols = generator.cols
+              var tested_rows = generator.rows
               generator.queue_free()
               verifier.queue_free()
               await process_frame
-              print("ENDLESS_LEVEL_OK level=%d theme=%d size=%dx%d" % [level, expected_theme, generator.cols, generator.rows])
+              print("ENDLESS_LEVEL_OK level=%d theme=%d size=%dx%d" % [level, expected_theme, tested_cols, tested_rows])
             print("ALL_ENDLESS_GENERATOR_TESTS_OK")
             quit(0)
           GDSCRIPT
