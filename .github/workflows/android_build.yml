@@ -161,6 +161,76 @@ jobs:
           fi
           grep -q "ALL_LEVELS_0_TO_10_OK" level-simulation.log
 
+      - name: Validate endless generator and camera-scale worlds
+        shell: bash
+        run: |
+          cat > /tmp/mikrozz_endless_test.gd <<'GDSCRIPT'
+          extends SceneTree
+          const Maze = preload("res://scripts/MazeGenerator.gd")
+
+          func _initialize() -> void:
+            call_deferred("_run_tests")
+
+          func _run_tests() -> void:
+            var test_levels = [11, 12, 13, 14, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 62, 63, 100]
+            for level in test_levels:
+              var generator = Maze.new()
+              root.add_child(generator)
+              generator.generate(level, Vector2(480, 854), 710000 + level)
+              await process_frame
+              var expected_theme = int((level - 11) / 4) % 13
+              assert(generator.theme_id == expected_theme, "Wrong theme for level %d" % level)
+              assert(generator.solution.size() >= 4, "Missing full route at level %d" % level)
+              assert(generator.solution[0] == generator.start_cell, "Wrong route start at level %d" % level)
+              assert(generator.solution[generator.solution.size() - 1] == generator.target_cell, "Wrong route finish at level %d" % level)
+              var inside_count = 0
+              var visited = {}
+              for y in range(generator.rows):
+                for x in range(generator.cols):
+                  if generator.cells[y][x]["inside"]:
+                    inside_count += 1
+              for cell in generator.solution:
+                visited[cell] = true
+              assert(visited.size() == inside_count, "Route does not cover every cell at level %d" % level)
+              assert(is_equal_approx(generator.cell_size_x * generator.cell_size_y, 1764.0), "Logical cell area changed at level %d" % level)
+              assert(generator.gate_bodies.size() <= 3, "Too many gates at level %d" % level)
+              for i in range(generator.solution.size() - 1):
+                var a: Vector2i = generator.solution[i]
+                var b: Vector2i = generator.solution[i + 1]
+                var delta: Vector2i = b - a
+                var direction = -1
+                if delta == Vector2i(0, -1): direction = 0
+                elif delta == Vector2i(1, 0): direction = 1
+                elif delta == Vector2i(0, 1): direction = 2
+                elif delta == Vector2i(-1, 0): direction = 3
+                assert(direction >= 0, "Non-adjacent route step at level %d" % level)
+                assert(generator.cells[a.y][a.x]["walls"][direction] == false, "Route crosses a wall at level %d" % level)
+              for child in generator.get_children():
+                if child is Area2D and child.is_in_group("hazard"):
+                  var hazard_cell := Vector2i(
+                    clampi(int((child.position.x - generator.origin.x) / generator.cell_size_x), 0, generator.cols - 1),
+                    clampi(int((child.position.y - generator.origin.y) / generator.cell_size_y), 0, generator.rows - 1)
+                  )
+                  assert(generator._safe_neighbor_count(hazard_cell) >= 3, "Hazard has fewer than three bypass sides at level %d" % level)
+              var verifier = Maze.new()
+              root.add_child(verifier)
+              verifier.generate(level, Vector2(480, 854), 710000 + level)
+              assert(generator.solution == verifier.solution, "Seed is not deterministic at level %d" % level)
+              generator.queue_free()
+              verifier.queue_free()
+              await process_frame
+              print("ENDLESS_LEVEL_OK level=%d theme=%d size=%dx%d" % [level, expected_theme, generator.cols, generator.rows])
+            print("ALL_ENDLESS_GENERATOR_TESTS_OK")
+            quit(0)
+          GDSCRIPT
+          set -o pipefail
+          "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --script /tmp/mikrozz_endless_test.gd 2>&1 | tee endless-simulation.log
+          if grep -E "SCRIPT ERROR|Parse Error|Assertion failed|ERROR:" endless-simulation.log; then
+            echo "Endless generator simulation reported errors"
+            exit 1
+          fi
+          grep -q "ALL_ENDLESS_GENERATOR_TESTS_OK" endless-simulation.log
+
       - name: Export debug APK
         run: |
           mkdir -p build
