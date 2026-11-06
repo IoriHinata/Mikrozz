@@ -144,8 +144,23 @@ func _build_level() -> void:
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	ui.hide_result()
-	ui.set_message("Collect every pearl • Hold a gate button to pass")
+	ui.set_message(_level_intro_message())
 	_update_hud()
+
+func _level_intro_message() -> String:
+	match level:
+		0: return "PRACTICE • Tilt, collect pearls, reach the exit"
+		1: return "ICE FLOOR • Momentum carries farther"
+		2: return "PORTALS • Explore side passages"
+		3: return "CONVEYORS • Watch the moving floor"
+		4: return "SPRINGS • Plan your landing"
+		5: return "MOVING WALLS • Time your passage"
+		6: return "MAGNETS + ROTATING BRIDGE • Control your momentum"
+		7: return "LASERS • Cross only while inactive"
+		8: return "TWO PEARLS • Bring both to the exit; solve the sequence"
+		9: return "HIDDEN MAZE • Walls reveal near the pearl"
+		10: return "BOSS • Tap the moving core three times"
+		_: return "Collect every pearl and reach the golden exit"
 
 func _count_coins() -> int:
 	var total := 0
