@@ -514,12 +514,14 @@ func _build_special_mechanics(level_number: int) -> void:
 			special_mechanic_count += 1
 	if level_number >= 10:
 		var boss_index := _find_free_path_index(0.68)
-		if boss_index >= 0:
-			var boss := BossOrb.new()
-			boss.position = _cell_center(solution[boss_index])
-			add_child(boss)
-			boss.defeated.connect(func(): boss_defeated.emit())
-			special_mechanic_count += 1
+		if boss_index < 0:
+			boss_index = clampi(int(solution.size() * 0.68), 2, solution.size() - 3)
+		var boss := BossOrb.new()
+		boss.add_to_group("special_occupied")
+		boss.position = _cell_center(solution[boss_index])
+		add_child(boss)
+		boss.defeated.connect(func(): boss_defeated.emit())
+		special_mechanic_count += 1
 
 func activate_sequence_plate(index: int) -> void:
 	if index == sequence_next:
