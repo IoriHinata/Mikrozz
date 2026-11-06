@@ -435,6 +435,13 @@ func _build_special_mechanics(level_number: int) -> void:
 		magnet.strength = 130.0
 		add_child(magnet)
 		special_mechanic_count += 1
+	if level_number >= 6 and solution.size() > 10:
+		var bridge := RotatingBridge.new()
+		bridge.position = _cell_center(solution[clampi(int(solution.size() * 0.84), 2, solution.size() - 3)])
+		bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
+		bridge.rotation_speed = 0.9
+		add_child(bridge)
+		special_mechanic_count += 1
 	if level_number >= 7:
 		var laser_cells: Array[Vector2i] = []
 		for y in range(rows):
@@ -671,6 +678,27 @@ class MovingBarrier:
 	func _draw() -> void:
 		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#b87985"), true, true, 2.0)
 
+class RotatingBridge:
+	extends AnimatableBody2D
+	var bridge_size := Vector2(28.0, 7.0)
+	var rotation_speed := 0.9
+	var elapsed := 0.0
+	var initial_rotation := 0.0
+	func _ready() -> void:
+		initial_rotation = rotation
+		sync_to_physics = true
+		var shape := RectangleShape2D.new()
+		shape.size = bridge_size
+		var collision := CollisionShape2D.new()
+		collision.shape = shape
+		add_child(collision)
+		queue_redraw()
+	func _physics_process(delta: float) -> void:
+		elapsed += delta
+		rotation = initial_rotation + (sin(elapsed * rotation_speed) * 0.5 + 0.5) * PI * 0.5
+	func _draw() -> void:
+		draw_rect(Rect2(-bridge_size * 0.5, bridge_size), Color("#9b91d3"), true, true, 2.0)
+
 class MagnetField:
 	extends Node2D
 	var radius := 70.0
@@ -753,7 +781,6 @@ class BossOrb:
 	var health := 3
 	var target: Node2D
 	func _ready() -> void:
-		add_to_group("hazard")
 		input_pickable = true
 		var shape := CircleShape2D.new()
 		shape.radius = 17.0
