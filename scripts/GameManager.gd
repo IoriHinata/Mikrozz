@@ -138,7 +138,12 @@ func _load_progress() -> void:
 
 func _save_progress(saved_level: int = -1) -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("progress", "level", maxi(0, saved_level if saved_level >= 0 else level))
+	var progress_level := level
+	if saved_level >= 0:
+		progress_level = saved_level
+	elif level_locked and exit_balls_entered.size() >= exit_required and score >= coins_total and (not boss_required or boss_is_defeated):
+		progress_level = level + 1
+	cfg.set_value("progress", "level", maxi(0, progress_level))
 	cfg.set_value("progress", "total_score", total_run_score)
 	cfg.set_value("progress", "best_score", best_score)
 	cfg.set_value("progress", "last_level_score", score)
