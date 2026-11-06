@@ -347,7 +347,7 @@ func _on_tutorial_finished() -> void:
 
 func _on_gate_pressed(index: int, pressed: bool) -> void:
 	if is_instance_valid(maze):
-		maze.set_gate_open(index, pressed)
+		maze.set_gate_button_state(index, pressed)
 
 func _update_hud() -> void:
 	ui.set_hud(level, lives, score, coins_total)
