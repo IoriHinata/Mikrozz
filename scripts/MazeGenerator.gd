@@ -578,7 +578,10 @@ class PortalPad:
 		body.global_position = destination
 		if body is RigidBody2D:
 			body.linear_velocity = body.linear_velocity.rotated(0.25)
-		get_tree().create_timer(0.8).timeout.connect(func(): if is_instance_valid(body) and body.has_meta("portal_cooldown"): body.remove_meta("portal_cooldown"))
+		get_tree().create_timer(0.8).timeout.connect(_clear_cooldown.bind(body))
+	func _clear_cooldown(body: Node) -> void:
+		if is_instance_valid(body) and body.has_meta("portal_cooldown"):
+			body.remove_meta("portal_cooldown")
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 13.0, Color("#8f8ee5"))
 		draw_circle(Vector2.ZERO, 8.0, Color("#dcdcff"))
@@ -628,7 +631,7 @@ class SpringPad:
 		queue_redraw()
 	func _on_enter(body: Node) -> void:
 		if body is RigidBody2D and body.is_in_group("player"):
-			body.apply_central_impulse(kick_direction.normalized() * 220.0)
+			(body as RigidBody2D).apply_central_impulse(kick_direction.normalized() * 220.0)
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 12.0, Color("#edb17c"))
 		draw_line(Vector2(-7, 3), Vector2(0, -5), Color.WHITE, 3.0)
@@ -725,7 +728,7 @@ class SequencePlate:
 		queue_redraw()
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 11.0, Color("#d3b5eb") if not triggered else Color("#9bd6b0"))
-		draw_string(ThemeDB.fallback_font, Vector2(-3, 4), str(plate_index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#59466d"))
+		draw_circle(Vector2.ZERO, 4.0, Color("#59466d"))
 
 class BossOrb:
 	extends Area2D
