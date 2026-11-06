@@ -228,7 +228,9 @@ jobs:
                   sequence_plate_count += 1
               if expected_theme == 12:
                 assert(sequence_plate_count == generator.sequence_length, "Sequence length mismatch at level %d" % level)
-              elif expected_theme not in [0, 7, 10]:
+              elif expected_theme in [0, 7, 10]:
+                assert(trap_count > 0, "Themed trap series generated no traps at level %d" % level)
+              else:
                 assert(trap_count == 0, "Foreign trap mixed into theme %d at level %d" % [expected_theme, level])
               var verifier = Maze.new()
               root.add_child(verifier)
