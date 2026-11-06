@@ -253,6 +253,8 @@ func _respawn_all() -> void:
 	start_point = maze.start_position
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
+	boss_required = level >= 10
+	boss_is_defeated = false
 	coins_total = _count_coins()
 	score = 0
 	_save_progress()
@@ -268,10 +270,10 @@ func _on_pressure_button_activated(index: int) -> void:
 	total_run_score += 3
 	for hazard in maze.get_children():
 		if hazard is Area2D and hazard.is_in_group("hazard"):
-			hazard.set_deferred("monitoring", false)
-	for hazard in maze.get_children():
-		if hazard is Area2D and hazard.is_in_group("hazard") and hazard.has_method("set_safe_disabled"):
-			hazard.set_safe_disabled(true)
+			if hazard.has_method("set_safe_disabled"):
+				hazard.set_safe_disabled(true)
+			else:
+				hazard.set_deferred("monitoring", false)
 	get_tree().create_timer(4.0).timeout.connect(_restore_hazards.bind(maze))
 	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
 	audio.play_win()
