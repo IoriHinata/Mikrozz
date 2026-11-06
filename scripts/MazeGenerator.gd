@@ -688,6 +688,7 @@ class MagnetField:
 class LaserHazard:
 	extends Area2D
 	var active := false
+	var safe_disabled := false
 	var pulse_timer: Timer
 	func _ready() -> void:
 		add_to_group("hazard")
@@ -705,8 +706,11 @@ class LaserHazard:
 		queue_redraw()
 	func _toggle() -> void:
 		active = not active
-		monitoring = active
+		monitoring = active and not safe_disabled
 		queue_redraw()
+	func set_safe_disabled(value: bool) -> void:
+		safe_disabled = value
+		monitoring = active and not safe_disabled
 	func _draw() -> void:
 		draw_rect(Rect2(-14, -6, 28, 12), Color("#e9d6dc"), true)
 		if active:
