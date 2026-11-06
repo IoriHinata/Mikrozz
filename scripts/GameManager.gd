@@ -523,7 +523,7 @@ func _on_camera_zoom(factor: float) -> void:
 func _camera_focus_position() -> Vector2:
 	if not is_instance_valid(maze):
 		return ball.global_position if is_instance_valid(ball) else viewport_size * 0.5
-	var board_size := maze.board_rect.size * camera_zoom
+	var board_size: Vector2 = maze.board_rect.size * camera_zoom
 	var available := Vector2(viewport_size.x - 20.0, viewport_size.y - 220.0)
 	if board_size.x <= available.x and board_size.y <= available.y:
 		return maze.board_rect.get_center()
