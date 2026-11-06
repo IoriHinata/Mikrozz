@@ -125,10 +125,19 @@ func _load_progress() -> void:
 	restore_level_state = bool(cfg.get_value("state", "available", false)) and level_seed != 0
 	if restore_level_state:
 		score = maxi(0, int(cfg.get_value("state", "score", 0)))
-		collected_coin_positions = cfg.get_value("state", "collected_coins", [])
+		collected_coin_positions.clear()
+		for saved_coin_position in cfg.get_value("state", "collected_coins", []):
+			if saved_coin_position is Vector2:
+				collected_coin_positions.append(saved_coin_position)
 		saved_maze_snapshot = cfg.get_value("state", "maze_snapshot", [])
-		saved_ball_positions = cfg.get_value("state", "ball_positions", [])
-		saved_ball_velocities = cfg.get_value("state", "ball_velocities", [])
+		saved_ball_positions.clear()
+		for saved_position in cfg.get_value("state", "ball_positions", []):
+			if saved_position is Vector2:
+				saved_ball_positions.append(saved_position)
+		saved_ball_velocities.clear()
+		for saved_velocity in cfg.get_value("state", "ball_velocities", []):
+			if saved_velocity is Vector2:
+				saved_ball_velocities.append(saved_velocity)
 		saved_boss_defeated = bool(cfg.get_value("state", "boss_defeated", false))
 		saved_sequence_next = int(cfg.get_value("state", "sequence_next", 0))
 		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
