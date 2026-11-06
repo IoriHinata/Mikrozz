@@ -286,11 +286,15 @@ func _build_geometry(level_number: int) -> void:
 						_add_wall(_wall_center(cell, d), _wall_size(d))
 
 func _build_objects(level_number: int) -> void:
-	var coin_count := clampi(3 + int(level_number / 2), 3, 10)
+	var unique_route_cells: Array[Vector2i] = []
+	for route_cell in solution:
+		if route_cell != start_cell and route_cell != target_cell and route_cell not in unique_route_cells:
+			unique_route_cells.append(route_cell)
+	var coin_count := mini(clampi(3 + int(level_number / 2), 3, 10), unique_route_cells.size())
 	for i in range(coin_count):
-		var path_index := clampi(int((float(i + 1) / float(coin_count + 1)) * (solution.size() - 1)), 1, solution.size() - 2)
+		var route_index := clampi(int((float(i + 1) / float(coin_count + 1)) * unique_route_cells.size()), 0, unique_route_cells.size() - 1)
 		var coin := CoinScript.new()
-		coin.position = _cell_center(solution[path_index])
+		coin.position = _cell_center(unique_route_cells[route_index])
 		add_child(coin)
 		coin_body_created.emit(coin)
 	var hazard_count := mini(12, maxi(0, int((level_number - 1) * 1.15))) if not endless_mode else 0
@@ -313,7 +317,7 @@ func _build_objects(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var candidate := Vector2i(x, y)
-				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
+				if cells[y][x]["inside"] and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
 					plate_cells.append(candidate)
 		plate_cells.shuffle()
 		var plate_count := mini(2, 1 + int(level_number / 6))
@@ -527,7 +531,7 @@ func _build_special_mechanics(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
+				if cells[y][x]["inside"] and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 					branches.append(cell)
 		if branches.size() >= 2:
 			branches.shuffle()
@@ -686,6 +690,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				special_mechanic_count += 1
 		7:
 			for i in range(mini(count, route_indices.size())):
+				_ensure_three_open_sides(solution[route_indices[i]])
 				var barrier := MovingBarrier.new()
 				barrier.position = _cell_center(solution[route_indices[i]])
 				barrier.travel = cell_size * 0.18
