@@ -91,7 +91,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	queue_redraw()
 
 func _process(_delta: float) -> void:
-	if active_level >= 9:
+	if (endless_mode and theme_id == 11) or (not endless_mode and active_level == 9):
 		var players := get_tree().get_nodes_in_group("player")
 		if not players.is_empty():
 			var player := players[0] as Node2D
@@ -334,7 +334,7 @@ func _build_objects(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var candidate := Vector2i(x, y)
-				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
+				if cells[y][x]["inside"] and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
 					pop_spawn_cells.append(candidate)
 		pop_spawn_cells.shuffle()
 		if not pop_spawn_cells.is_empty():
@@ -456,7 +456,8 @@ func _draw() -> void:
 				continue
 			var cell := Vector2i(x, y)
 			var cell_position := _cell_center(cell)
-			if active_level >= 9 and cell_position.distance_to(reveal_position) > cell_size * 2.35:
+			var hidden_mode := (endless_mode and theme_id == 11) or (not endless_mode and active_level == 9)
+			if hidden_mode and cell_position.distance_to(reveal_position) > cell_size * 2.35:
 				continue
 			var floor_rect := Rect2(origin + Vector2(x * cell_size_x, y * cell_size_y), Vector2(cell_size_x, cell_size_y))
 			draw_rect(floor_rect, palette.floor, true)
@@ -640,7 +641,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 		var route_cell: Vector2i = solution[i]
 		if route_cell != start_cell and route_cell != target_cell and not _cell_is_occupied(route_cell) and (route_indices.is_empty() or route_cell != solution[route_indices.back()]):
 			route_indices.append(i)
-	var count := 1 + theme_stage
+	var count := theme_stage
 	match theme_id:
 		0:
 			var placed := 0
@@ -728,7 +729,6 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 					if placed_lasers >= count:
 						break
 		11:
-			active_level = maxi(active_level, 9)
 			special_mechanic_count = 1
 		12:
 			for i in range(mini(3, route_indices.size())):
@@ -797,6 +797,9 @@ func apply_level_snapshot(snapshot: Array) -> void:
 						break
 		if child.has_method("queue_redraw"):
 			child.queue_redraw()
+	for gate_index in range(gate_bodies.size()):
+		set_gate_open(gate_index, false)
+	gate_button_states.fill(false)
 
 func remove_collected_coins(positions: Array) -> void:
 	for child in get_children():
