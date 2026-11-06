@@ -116,6 +116,8 @@ jobs:
               assert(generator.solution.size() >= 4, "Level %d has no usable route" % level)
               assert(generator.start_cell != generator.target_cell, "Level %d start equals exit" % level)
               assert(generator.gate_bodies.size() <= 3, "Level %d has too many gates" % level)
+              if level >= 5:
+                assert(generator.gate_bodies.size() == 3, "Level %d must expose all three multi-touch gates" % level)
               assert(generator.special_mechanic_count >= previous_special_count, "Level %d lost its mechanic progression" % level)
               previous_special_count = generator.special_mechanic_count
               var coins = 0
@@ -135,8 +137,18 @@ jobs:
                 assert(direction >= 0, "Level %d route contains a non-adjacent step" % level)
                 assert(generator.cells[a.y][a.x]["walls"][direction] == false, "Level %d route crosses a closed wall" % level)
               if not generator.gate_bodies.is_empty():
-                generator.set_gate_open(0, true)
-                generator.set_gate_open(0, false)
+                generator.set_gate_button_state(0, true)
+                if level >= 5:
+                  generator.set_gate_button_state(1, true)
+                  assert(not generator.gate_button_states[2], "Level %d opened the combo gate too early" % level)
+                  generator.set_gate_button_state(2, true)
+                  await process_frame
+                  var combo_shape = generator.gate_bodies[2].get_child(0) as CollisionShape2D
+                  assert(combo_shape.disabled, "Level %d combo gate did not open with three fingers" % level)
+                  generator.set_gate_button_state(1, false)
+                  await process_frame
+                  assert(not combo_shape.disabled, "Level %d combo gate stayed open after a finger lifted" % level)
+                generator.set_gate_button_state(0, false)
               print("LEVEL_TEST_OK level=%d path=%d coins=%d gates=%d mechanics=%d" % [level, generator.solution.size(), coins, generator.gate_bodies.size(), generator.special_mechanic_count])
             print("ALL_LEVELS_0_TO_10_OK")
             quit(0)
