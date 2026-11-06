@@ -224,13 +224,16 @@ func _build_level() -> void:
 	if restoring_level:
 		_restore_player_bodies()
 		restore_level_state = false
-	if is_instance_valid(camera) and is_instance_valid(ball):
-		camera.global_position = ball.global_position + camera_pan_offset
+	if is_instance_valid(camera):
+		camera.global_position = _camera_focus_position() + camera_pan_offset
 	ui.hide_result()
 	ui.set_message(_level_intro_message())
 	_update_hud()
 
 func _level_intro_message() -> String:
+	if level >= 11 and is_instance_valid(maze):
+		var themes := ["ШИПЫ", "ЛЁД", "ПЕСОК", "ЛИПКАЯ ПОВЕРХНОСТЬ", "ПОРТАЛЫ", "КОНВЕЙЕРЫ", "ПРУЖИНЫ", "ДВИЖУЩИЕСЯ СТЕНЫ", "МАГНИТЫ", "ВРАЩАЮЩИЕСЯ МОСТЫ", "ЛАЗЕРЫ", "СКРЫТЫЙ ЛАБИРИНТ", "ПОСЛЕДОВАТЕЛЬНОСТИ"]
+		return "БЕСКОНЕЧНЫЙ РЕЖИМ • %s • ЭТАП %d/4 • %d×%d" % [themes[maze.theme_id], maze.theme_stage, maze.cols, maze.rows]
 	match level:
 		0: return "ТРЕНИРОВКА • Наклоняйте телефон, собирайте жемчужины и найдите выход"
 		1: return "ЛЁД • Шарик скользит дальше по инерции"
@@ -517,15 +520,24 @@ func _on_camera_zoom(factor: float) -> void:
 		camera.zoom = Vector2.ONE * camera_zoom
 	_save_progress()
 
+func _camera_focus_position() -> Vector2:
+	if not is_instance_valid(maze):
+		return ball.global_position if is_instance_valid(ball) else viewport_size * 0.5
+	var board_size := maze.board_rect.size * camera_zoom
+	var available := Vector2(viewport_size.x - 20.0, viewport_size.y - 220.0)
+	if board_size.x <= available.x and board_size.y <= available.y:
+		return maze.board_rect.get_center()
+	return ball.global_position if is_instance_valid(ball) else maze.board_rect.get_center()
+
 func _center_camera() -> void:
 	camera_pan_offset = Vector2.ZERO
-	if is_instance_valid(ball) and is_instance_valid(camera):
-		camera.global_position = ball.global_position
+	if is_instance_valid(camera):
+		camera.global_position = _camera_focus_position()
 	_save_progress()
 
 func _process(delta: float) -> void:
-	if is_instance_valid(camera) and is_instance_valid(ball):
-		var target := ball.global_position + camera_pan_offset
+	if is_instance_valid(camera):
+		var target := _camera_focus_position() + camera_pan_offset
 		camera.global_position = camera.global_position.lerp(target, minf(1.0, delta * 8.0))
 	autosave_elapsed += delta
 	if autosave_elapsed >= 2.0:
