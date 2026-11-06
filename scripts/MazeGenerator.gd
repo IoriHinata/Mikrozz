@@ -260,7 +260,16 @@ func _build_geometry(level_number: int) -> void:
 	var chosen_indices: Array[int] = []
 	for i in range(gate_limit):
 		var path_index := clampi(int(float(solution.size() - 1) * fractions[i]), 2, solution.size() - 2)
-		if path_index in chosen_indices:
+		var attempts := 0
+		while attempts < solution.size():
+			var candidate_a: Vector2i = solution[path_index - 1]
+			var candidate_b: Vector2i = solution[path_index]
+			var candidate_key := _edge_key(candidate_a, candidate_b)
+			if not chosen_indices.has(path_index) and not gate_edges.has(candidate_key):
+				break
+			path_index = 2 + posmod(path_index - 1 + 1, maxi(1, solution.size() - 3))
+			attempts += 1
+		if attempts >= solution.size():
 			continue
 		chosen_indices.append(path_index)
 		var a: Vector2i = solution[path_index - 1]
