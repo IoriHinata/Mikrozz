@@ -9,6 +9,9 @@ signal touch_direction_changed(direction: Vector2)
 signal settings_changed(key: String, value: Variant)
 signal settings_pause_changed(paused: bool)
 signal tutorial_finished
+signal regenerate_requested
+signal camera_zoom_requested(factor: float)
+signal camera_center_requested
 var tutorial_panel: PanelContainer
 var tutorial_page := 0
 const TUTORIAL_PAGES := [["ДОБРО ПОЖАЛОВАТЬ В MIKROZZ", "Проведите шарик через лабиринт, плавно наклоняя телефон. В этой тренировочной комнате вы освоите управление."], ["КАЛИБРОВКА ТЕЛЕФОНА", "Положите телефон ровно и неподвижно, затем нажмите «КАЛИБРОВАТЬ». Индикатор сверху показывает, работает ли управление наклоном."], ["ДВИЖЕНИЕ И УПРАВЛЕНИЕ", "Медленно наклоняйте телефон в сторону движения шарика. Достаточно небольших движений — не трясите устройство. Стрелки в нижней панели позволяют управлять касаниями."], ["ИСПОЛЬЗУЙТЕ ПАЛЬЦЫ", "Удерживайте кнопки ворот в нижней панели, одновременно управляя шариком. На поздних уровнях нужно зажимать несколько кнопок сразу — используйте несколько пальцев."], ["ГОЛОВОЛОМКИ И ОСОБЫЕ ОБЪЕКТЫ", "Светящиеся плиты дают бонусы, порталы переносят между проходами, а лёд, песок, конвейеры и пружины меняют движение шарика. На поздних уровнях появятся движущиеся преграды, магниты, лазеры с таймером и скрытый лабиринт."], ["ДВА ШАРИКА И БОСС", "Начиная с 8-го уровня, доведите до выхода оба шарика. На 10-м уровне трижды нажмите на движущегося босса, чтобы победить его. Красные бонусные шарики тоже можно лопать; золотые и синие дают особые награды."]]
@@ -74,6 +77,42 @@ func setup(size: Vector2) -> void:
 	settings_button.pressed.connect(func(): open_settings(current_music, current_sfx, current_sensitivity, current_vibration))
 	root.add_child(settings_button)
 	_build_direction_pad()
+	_build_maze_tools()
+
+func _build_maze_tools() -> void:
+	var y := viewport_size.y - 188.0
+	var regenerate := Button.new()
+	regenerate.text = "НОВЫЙ ЛАБИРИНТ"
+	regenerate.position = Vector2(12, y)
+	regenerate.size = Vector2(126, 38)
+	regenerate.focus_mode = Control.FOCUS_NONE
+	regenerate.add_theme_font_size_override("font_size", 10)
+	regenerate.pressed.connect(func(): regenerate_requested.emit())
+	root.add_child(regenerate)
+	var zoom_out := Button.new()
+	zoom_out.text = "−"
+	zoom_out.position = Vector2(146, y)
+	zoom_out.size = Vector2(38, 38)
+	zoom_out.focus_mode = Control.FOCUS_NONE
+	zoom_out.add_theme_font_size_override("font_size", 20)
+	zoom_out.pressed.connect(func(): camera_zoom_requested.emit(0.82))
+	root.add_child(zoom_out)
+	var zoom_in := Button.new()
+	zoom_in.text = "+"
+	zoom_in.position = Vector2(190, y)
+	zoom_in.size = Vector2(38, 38)
+	zoom_in.focus_mode = Control.FOCUS_NONE
+	zoom_in.add_theme_font_size_override("font_size", 20)
+	zoom_in.pressed.connect(func(): camera_zoom_requested.emit(1.22))
+	root.add_child(zoom_in)
+	var center := Button.new()
+	center.text = "ЦЕНТР"
+	center.position = Vector2(234, y)
+	center.size = Vector2(70, 38)
+	center.focus_mode = Control.FOCUS_NONE
+	center.add_theme_font_size_override("font_size", 10)
+	center.pressed.connect(func(): camera_center_requested.emit())
+	root.add_child(center)
 
 func _build_direction_pad() -> void:
 	var dock := PanelContainer.new()
