@@ -70,9 +70,11 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 func _process(_delta: float) -> void:
 	if active_level >= 9:
 		var players := get_tree().get_nodes_in_group("player")
-		if not players.is_empty() and is_instance_valid(players[0]):
-			reveal_position = players[0].global_position
-			queue_redraw()
+		if not players.is_empty():
+			var player := players[0] as Node2D
+			if is_instance_valid(player):
+				reveal_position = player.global_position
+				queue_redraw()
 
 func _build_cells() -> void:
 	cells.clear()
@@ -770,7 +772,7 @@ class BossOrb:
 			global_position = global_position.move_toward(target.global_position, 24.0 * delta)
 	func _on_body(body: Node) -> void:
 		if body.is_in_group("player") and body is RigidBody2D:
-			body.apply_central_impulse((body.global_position - global_position).normalized() * 100.0)
+			(body as RigidBody2D).apply_central_impulse((body.global_position - global_position).normalized() * 100.0)
 	func _on_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 		var tapped: bool = event is InputEventScreenTouch and event.pressed
 		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
