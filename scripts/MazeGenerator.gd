@@ -235,7 +235,8 @@ func _add_maze_loops() -> void:
 			if y + 1 < rows and cells[y + 1][x]["inside"] and cells[y][x]["walls"][2]:
 				candidates.append(cell)
 	candidates.shuffle()
-	var loop_budget := mini(candidates.size(), maxi(2, int(float(candidates.size()) * 0.08)))
+	var loop_ratio := minf(0.16, 0.08 + float(endless_cycle) * 0.008)
+	var loop_budget := mini(candidates.size(), maxi(2, int(float(candidates.size()) * loop_ratio)))
 	var opened := 0
 	for cell in candidates:
 		if opened >= loop_budget:
@@ -843,7 +844,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var conveyor := ConveyorZone.new()
 				conveyor.position = _cell_center(solution[route_indices[i]])
 				conveyor.direction = Vector2.RIGHT if (i + theme_stage) % 2 == 0 else Vector2.LEFT
-				conveyor.force_strength = 185.0 + float(endless_cycle + theme_stage) * 18.0
+				conveyor.force_strength = minf(360.0, 185.0 + float(endless_cycle + theme_stage) * 18.0)
 				add_child(conveyor)
 				special_mechanic_count += 1
 		6:
@@ -851,7 +852,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var spring := SpringPad.new()
 				spring.position = _cell_center(solution[route_indices[i]])
 				spring.kick_direction = [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT][posmod(i + theme_stage, 4)]
-				spring.impulse_strength = 220.0 + float(endless_cycle + theme_stage) * 18.0
+				spring.impulse_strength = minf(420.0, 220.0 + float(endless_cycle + theme_stage) * 18.0)
 				add_child(spring)
 				special_mechanic_count += 1
 		7:
@@ -866,7 +867,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var barrier := MovingBarrier.new()
 				barrier.position = _cell_center(barrier_cell)
 				barrier.travel = cell_size * 0.18
-				barrier.speed = 1.0 + float(theme_stage + endless_cycle) * 0.22
+				barrier.speed = minf(4.5, 1.0 + float(theme_stage + endless_cycle) * 0.22)
 				barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
 				add_child(barrier)
 				special_mechanic_count += 1
@@ -875,7 +876,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var magnet := MagnetField.new()
 				magnet.position = _cell_center(solution[route_indices[i]])
 				magnet.radius = cell_size * (1.0 + float(theme_stage) * 0.12)
-				magnet.strength = 75.0 + float(theme_stage + endless_cycle) * 18.0
+				magnet.strength = minf(280.0, 75.0 + float(theme_stage + endless_cycle) * 18.0)
 				add_child(magnet)
 				special_mechanic_count += 1
 		9:
@@ -883,7 +884,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var bridge := RotatingBridge.new()
 				bridge.position = _cell_center(solution[route_indices[i]])
 				bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
-				bridge.rotation_speed = 0.65 + float(theme_stage + endless_cycle) * 0.12
+				bridge.rotation_speed = minf(2.2, 0.65 + float(theme_stage + endless_cycle) * 0.12)
 				add_child(bridge)
 				special_mechanic_count += 1
 		10:
