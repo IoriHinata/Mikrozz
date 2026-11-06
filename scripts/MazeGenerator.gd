@@ -70,7 +70,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	if endless_mode:
 		cols = mini(192, 9 + int(float(growth) * 0.70))
 		rows = mini(192, 11 + int(float(growth) * 0.70))
-	cell_size = 42.0
+	cell_size = 60.0
 	var aspect_values: Array[float] = [1.0, 1.25, 0.8, 1.5, 0.667]
 	var aspect := aspect_values[posmod(maxi(0, level_number), aspect_values.size())]
 	cell_size_x = cell_size * aspect
@@ -666,7 +666,7 @@ func _build_special_mechanics(level_number: int) -> void:
 			var surface := SurfaceZone.new()
 			surface.mode = ["ice", "sand", "sticky", "ice", "sand"][posmod(level_number - 1, 5)]
 			surface.position = _cell_center(solution[surface_index])
-			surface.size_radius = cell_size * 0.34
+			surface.size_radius = minf(cell_size_x, cell_size_y) * 0.34
 			add_child(surface)
 			special_mechanic_count += 1
 	if level_number >= 2:
