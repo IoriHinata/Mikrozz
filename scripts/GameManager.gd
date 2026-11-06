@@ -252,7 +252,7 @@ func _build_level() -> void:
 	boss_is_defeated = saved_boss_defeated if restoring_level else false
 	if not restoring_level:
 		var fit_x := viewport_size.x / maxf(1.0, maze.board_rect.size.x)
-		var fit_y := (viewport_size.y - 220.0) / maxf(1.0, maze.board_rect.size.y)
+		var fit_y := (viewport_size.y - 298.0) / maxf(1.0, maze.board_rect.size.y)
 		camera_zoom = clampf(minf(fit_x, fit_y), 0.18, 1.0)
 		camera.zoom = Vector2.ONE * camera_zoom
 	ui.make_gate_buttons(maze.gate_bodies.size())
@@ -568,9 +568,9 @@ func _camera_focus_position() -> Vector2:
 	if not is_instance_valid(maze):
 		return ball.global_position if is_instance_valid(ball) else viewport_size * 0.5
 	var board_size: Vector2 = maze.board_rect.size * camera_zoom
-	var available := Vector2(viewport_size.x - 20.0, viewport_size.y - 220.0)
+	var available := Vector2(viewport_size.x - 20.0, viewport_size.y - 298.0)
 	if board_size.x <= available.x and board_size.y <= available.y:
-		return maze.board_rect.get_center()
+		return maze.board_rect.get_center() + Vector2(0.0, 46.0 / camera_zoom)
 	return ball.global_position if is_instance_valid(ball) else maze.board_rect.get_center()
 
 func _center_camera() -> void:
