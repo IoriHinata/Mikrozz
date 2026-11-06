@@ -30,6 +30,7 @@ var palette: Dictionary
 var cells: Array = []
 var solution: Array[Vector2i] = []
 var gate_bodies: Array[StaticBody2D] = []
+var gate_button_states: Array[bool] = []
 var start_position := Vector2.ZERO
 var finish_position := Vector2.ZERO
 var board_rect := Rect2()
@@ -64,6 +65,9 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 	_build_cells()
 	_build_solution()
 	_build_geometry(level_number)
+	gate_button_states.clear()
+	for _i in range(gate_bodies.size()):
+		gate_button_states.append(false)
 	_build_objects(level_number)
 	queue_redraw()
 
@@ -155,17 +159,18 @@ func _build_solution() -> void:
 
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
-	var candidates: Array[Dictionary] = []
-	var spacing := maxi(4, 8 - int(level_number / 3))
-	for i in range(3, solution.size() - 2):
-		if i % spacing == 0:
-			var a: Vector2i = solution[i - 1]
-			var b: Vector2i = solution[i]
-			candidates.append({"a": a, "b": b, "position": (_cell_center(a) + _cell_center(b)) * 0.5})
 	var gate_limit := 1 if level_number == 0 else mini(3, 1 + int(maxi(0, level_number - 1) / 2))
-	for i in range(mini(candidates.size(), gate_limit)):
-		var edge: Dictionary = candidates[i]
-		gate_edges[_edge_key(edge.a, edge.b)] = edge
+	var fractions: Array[float] = [0.24, 0.52, 0.78]
+	var chosen_indices: Array[int] = []
+	for i in range(gate_limit):
+		var path_index := clampi(int(float(solution.size() - 1) * fractions[i]), 2, solution.size() - 2)
+		if path_index in chosen_indices:
+			continue
+		chosen_indices.append(path_index)
+		var a: Vector2i = solution[path_index - 1]
+		var b: Vector2i = solution[path_index]
+		var edge: Dictionary = {"a": a, "b": b, "position": (_cell_center(a) + _cell_center(b)) * 0.5}
+		gate_edges[_edge_key(a, b)] = edge
 	var dirs := [Vector2i(0, -1), Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
 	for y in range(rows):
 		for x in range(cols):
@@ -307,6 +312,16 @@ func _add_gate(at: Vector2, vertical: bool) -> void:
 	body.add_child(visual)
 	add_child(body)
 	gate_bodies.append(body)
+
+func set_gate_button_state(index: int, pressed: bool) -> void:
+	if index < 0 or index >= gate_button_states.size():
+		return
+	gate_button_states[index] = pressed
+	for gate_index in range(gate_bodies.size()):
+		var opened := gate_button_states[gate_index]
+		if active_level >= 5 and gate_index == 2:
+			opened = gate_button_states.size() >= 3 and gate_button_states[0] and gate_button_states[1] and gate_button_states[2]
+		set_gate_open(gate_index, opened)
 
 func set_gate_open(index: int, opened: bool) -> void:
 	if index < 0 or index >= gate_bodies.size():
