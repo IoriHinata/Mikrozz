@@ -349,7 +349,7 @@ func show_result(title: String, detail: String, allow_next: bool) -> void:
 	body.add_theme_color_override("font_color", Color("#718579"))
 	box.add_child(body)
 	var action := Button.new()
-	action.text = "ДАЛЕЕ LEVEL" if allow_next else "ПОПРОБОВАТЬ СНОВА"
+	action.text = "СЛЕДУЮЩИЙ УРОВЕНЬ" if allow_next else "ПОПРОБОВАТЬ СНОВА"
 	action.custom_minimum_size = Vector2(180, 48)
 	action.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	action.pressed.connect(_on_result_action.bind(allow_next))
