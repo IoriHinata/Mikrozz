@@ -41,6 +41,7 @@ var saved_boss_defeated := false
 var saved_sequence_next := 0
 var saved_safe_passage_time := 0.0
 var saved_exit_count := 0
+var saved_visited_cells: Array = []
 var camera: Camera2D
 var camera_zoom := 1.0
 var camera_pan_offset := Vector2.ZERO
@@ -144,6 +145,10 @@ func _load_progress() -> void:
 		saved_sequence_next = int(cfg.get_value("state", "sequence_next", 0))
 		saved_safe_passage_time = maxf(0.0, float(cfg.get_value("state", "safe_passage_time", 0.0)))
 		saved_exit_count = clampi(int(cfg.get_value("state", "exit_count", 0)), 0, 1)
+		saved_visited_cells.clear()
+		for saved_cell in cfg.get_value("state", "visited_cells", []):
+			if saved_cell is Vector2i:
+				saved_visited_cells.append(saved_cell)
 		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
 		camera_pan_offset = cfg.get_value("state", "camera_pan", Vector2.ZERO)
 	if not tutorial_completed:
@@ -181,6 +186,7 @@ func _save_progress(saved_level: int = -1) -> void:
 		cfg.set_value("state", "sequence_next", maze.sequence_next)
 		cfg.set_value("state", "safe_passage_time", safe_passage_timer.time_left if is_instance_valid(safe_passage_timer) else 0.0)
 		cfg.set_value("state", "exit_count", exit_balls_entered.size())
+		cfg.set_value("state", "visited_cells", maze.get_visited_cells())
 		cfg.set_value("state", "camera_zoom", camera_zoom)
 		cfg.set_value("state", "camera_pan", camera_pan_offset)
 	else:
@@ -232,6 +238,7 @@ func _build_level() -> void:
 		maze.apply_level_snapshot(saved_maze_snapshot)
 		maze.remove_collected_coins(collected_coin_positions)
 		maze.sequence_next = saved_sequence_next
+		maze.restore_visited_cells(saved_visited_cells)
 		if saved_boss_defeated:
 			for maze_child in maze.get_children():
 				if maze_child.is_in_group("boss"):
@@ -255,6 +262,7 @@ func _build_level() -> void:
 		if saved_safe_passage_time > 0.0:
 			safe_passage_timer.start(saved_safe_passage_time)
 		saved_safe_passage_time = 0.0
+		saved_visited_cells.clear()
 		restore_level_state = false
 	if is_instance_valid(camera):
 		camera.global_position = _camera_focus_position() + camera_pan_offset
@@ -336,6 +344,10 @@ func _on_hazard_body(body: Node) -> void:
 
 func _on_exit_body(body: Node) -> void:
 	if not body.is_in_group("player") or level_locked:
+		return
+	var coverage := maze.get_coverage_percent() if is_instance_valid(maze) else 0.0
+	if coverage < 99.9:
+		ui.set_message("Исследуйте весь лабиринт: %d%%" % int(round(coverage)))
 		return
 	if score < coins_total:
 		ui.set_message("Сначала соберите все жемчужины: %d/%d" % [coins_total, score, coins_total])
