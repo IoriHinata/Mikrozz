@@ -314,11 +314,17 @@ func _build_objects(level_number: int) -> void:
 			if cells[y][x]["inside"] and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 				candidates.append(cell)
 	candidates.shuffle()
-	for i in range(mini(hazard_count, candidates.size())):
-		_ensure_three_open_sides(candidates[i])
-		var hazard := _make_hazard(_cell_center(candidates[i]), cell_size * 0.20, true)
+	var placed_hazards := 0
+	for candidate in candidates:
+		if placed_hazards >= hazard_count:
+			break
+		_ensure_three_open_sides(candidate)
+		if _safe_neighbor_count(candidate) < 3:
+			continue
+		var hazard := _make_hazard(_cell_center(candidate), cell_size * 0.20, true)
 		add_child(hazard)
 		hazard_created.emit(hazard)
+		placed_hazards += 1
 
 	# Pressure plates are optional puzzle controls. The ball activates them by rolling over.
 	if level_number >= 2 and not endless_mode:
