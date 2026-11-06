@@ -18,6 +18,7 @@ const TUTORIAL_PAGES := [["ДОБРО ПОЖАЛОВАТЬ В MIKROZZ", "Про�
 
 var root: Control
 var hud_label: Label
+var coverage_label: Label
 var message_label: Label
 var sensor_label: Label
 var gate_buttons: Array[Button] = []
@@ -46,6 +47,13 @@ func setup(size: Vector2) -> void:
 	hud_label.add_theme_font_size_override("font_size", 19)
 	hud_label.add_theme_color_override("font_color", Color("#50695d"))
 	root.add_child(hud_label)
+	coverage_label = Label.new()
+	coverage_label.position = Vector2(18, 108)
+	coverage_label.size = Vector2(size.x - 36, 18)
+	coverage_label.add_theme_font_size_override("font_size", 10)
+	coverage_label.add_theme_color_override("font_color", Color("#82968a"))
+	coverage_label.text = "ИССЛЕДОВАНО: 0%"
+	root.add_child(coverage_label)
 	message_label = Label.new()
 	message_label.position = Vector2(10, 52)
 	message_label.size = Vector2(size.x - 20, 30)
@@ -318,8 +326,9 @@ func set_sensor_status(available: bool, magnitude: float) -> void:
 		sensor_label.text = "ДАТЧИК НАКЛОНА: НЕДОСТУПЕН"
 		sensor_label.add_theme_color_override("font_color", Color("#b06d65"))
 
-func set_hud(level: int, lives: int, score: int, total: int) -> void:
+func set_hud(level: int, lives: int, score: int, total: int, coverage: int = 0) -> void:
 	hud_label.text = "УРОВЕНЬ %02d     ♥ %d     ЖЕМЧУЖИНЫ %d/%d" % [level, lives, score, total]
+	coverage_label.text = "ИССЛЕДОВАНО: %d%%" % clampi(coverage, 0, 100)
 
 func set_message(value: String) -> void:
 	message_label.text = value
