@@ -27,6 +27,7 @@ var exit_balls_entered: Dictionary = {}
 var exit_required := 1
 var boss_required := false
 var boss_is_defeated := false
+var safe_passage_timer: Timer
 var music_volume := 0.32
 var sfx_volume := 0.75
 var vibration_enabled := true
@@ -34,6 +35,10 @@ var vibration_enabled := true
 func _ready() -> void:
 	randomize()
 	viewport_size = get_viewport_rect().size
+	safe_passage_timer = Timer.new()
+	safe_passage_timer.one_shot = true
+	safe_passage_timer.timeout.connect(_restore_current_safe_hazards)
+	add_child(safe_passage_timer)
 	_load_settings()
 	_load_progress()
 	var records := ConfigFile.new()
@@ -236,6 +241,8 @@ func _lose_life() -> void:
 		_respawn_all.call_deferred()
 
 func _respawn_all() -> void:
+	if is_instance_valid(safe_passage_timer):
+		safe_passage_timer.stop()
 	if is_instance_valid(ball):
 		ball.queue_free()
 	if is_instance_valid(maze):
@@ -274,12 +281,15 @@ func _on_pressure_button_activated(index: int) -> void:
 				hazard.set_safe_disabled(true)
 			else:
 				hazard.set_deferred("monitoring", false)
-	get_tree().create_timer(4.0).timeout.connect(_restore_hazards.bind(maze))
+	safe_passage_timer.start(4.0)
 	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
 	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
 		Input.vibrate_handheld(45)
 	_save_progress()
+
+func _restore_current_safe_hazards() -> void:
+	_restore_hazards(maze)
 
 func _restore_hazards(target_maze: Node) -> void:
 	if not is_instance_valid(target_maze) or target_maze != maze:
