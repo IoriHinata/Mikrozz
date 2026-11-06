@@ -291,7 +291,7 @@ func make_gate_buttons(count: int) -> void:
 	gate_buttons.clear()
 	for i in range(count):
 		var button := Button.new()
-		button.text = "G%d" % (i + 1)
+		button.text = "В%d" % (i + 1)
 		button.position = Vector2(viewport_size.x - 18.0 - float(i + 1) * 60.0, viewport_size.y - 105)
 		button.size = Vector2(54, 42)
 		button.focus_mode = Control.FOCUS_NONE
