@@ -73,7 +73,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	cell_size_x = cell_size * aspect
 	cell_size_y = cell_size / aspect
 	var board_size := Vector2(cols * cell_size_x, rows * cell_size_y)
-	origin = Vector2(cell_size_x * 2.0, cell_size_y * 2.0)
+	origin = Vector2(cell_size_x * 2.0, 140.0)
 	board_rect = Rect2(origin, board_size)
 	palette = PALETTES[posmod(maxi(0, level_number), PALETTES.size())]
 	shape_id = 0 if level_number <= 0 else posmod(level_number - 1, 4)
