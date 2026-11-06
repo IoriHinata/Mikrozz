@@ -465,6 +465,7 @@ func _make_hazard(at: Vector2, radius: float, spikes: bool) -> Area2D:
 	var area := Area2D.new()
 	area.position = at
 	area.add_to_group("hazard")
+	area.add_to_group("maze_trap")
 	var shape := CircleShape2D.new()
 	shape.radius = radius
 	var collision := CollisionShape2D.new()
@@ -711,6 +712,10 @@ func _build_special_mechanics(level_number: int) -> void:
 	if level_number >= 5 and solution.size() > 8:
 		var barrier_index := _find_free_path_index(0.72)
 		if barrier_index >= 0:
+			_ensure_three_open_sides(solution[barrier_index])
+			if _safe_neighbor_count(solution[barrier_index]) < 3:
+				barrier_index = -1
+		if barrier_index >= 0:
 			var barrier := MovingBarrier.new()
 			barrier.position = _cell_center(solution[barrier_index])
 			barrier.travel = cell_size * 0.18
@@ -741,14 +746,18 @@ func _build_special_mechanics(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
+				if cells[y][x]["inside"] and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 					laser_cells.append(cell)
 		if not laser_cells.is_empty():
 			laser_cells.shuffle()
-			var laser := LaserHazard.new()
-			laser.position = _cell_center(laser_cells[0])
-			add_child(laser)
-			hazard_created.emit(laser)
+			for laser_cell in laser_cells:
+				_ensure_three_open_sides(laser_cell)
+				if _safe_neighbor_count(laser_cell) >= 3 and not _hazard_too_close(laser_cell):
+					var laser := LaserHazard.new()
+					laser.position = _cell_center(laser_cell)
+					add_child(laser)
+					hazard_created.emit(laser)
+					break
 			special_mechanic_count += 1
 	if level_number >= 8 and solution.size() > 8:
 		var sequence_created := 0
@@ -1171,6 +1180,7 @@ class MovingBarrier:
 	var initial_position := Vector2.ZERO
 	func _ready() -> void:
 		add_to_group("special_occupied")
+		add_to_group("maze_trap")
 		initial_position = position
 		sync_to_physics = true
 		var shape := RectangleShape2D.new()
@@ -1232,6 +1242,7 @@ class LaserHazard:
 	var pulse_timer: Timer
 	func _ready() -> void:
 		add_to_group("hazard")
+		add_to_group("maze_trap")
 		var shape := RectangleShape2D.new()
 		shape.size = Vector2(28.0, 12.0)
 		var collision := CollisionShape2D.new()
