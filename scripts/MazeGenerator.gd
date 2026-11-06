@@ -690,6 +690,7 @@ func _build_special_mechanics(level_number: int) -> void:
 			boss_index = clampi(int(solution.size() * 0.68), 2, solution.size() - 3)
 		var boss := BossOrb.new()
 		boss.add_to_group("special_occupied")
+		boss.add_to_group("boss")
 		boss.position = _cell_center(solution[boss_index])
 		add_child(boss)
 		boss.defeated.connect(func(): boss_defeated.emit())
@@ -834,7 +835,7 @@ func get_level_snapshot() -> Array:
 			entry["velocity"] = (child as RigidBody2D).linear_velocity
 		if child is Area2D:
 			entry["monitoring"] = (child as Area2D).monitoring
-		for property_name in ["triggered", "defeated", "hits", "health"]:
+		for property_name in ["triggered", "defeated", "hits", "health", "elapsed", "active", "safe_disabled"]:
 			for property_info in child.get_property_list():
 				if String(property_info.name) == property_name:
 					entry[property_name] = child.get(property_name)
@@ -862,7 +863,7 @@ func apply_level_snapshot(snapshot: Array) -> void:
 			(child as RigidBody2D).linear_velocity = entry["velocity"]
 		if child is Area2D and entry.has("monitoring"):
 			(child as Area2D).set_deferred("monitoring", bool(entry["monitoring"]))
-		for property_name in ["triggered", "defeated", "hits", "health"]:
+		for property_name in ["triggered", "defeated", "hits", "health", "elapsed", "active", "safe_disabled"]:
 			if entry.has(property_name):
 				for property_info in child.get_property_list():
 					if String(property_info.name) == property_name:
