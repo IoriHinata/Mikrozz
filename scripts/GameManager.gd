@@ -351,7 +351,7 @@ func _on_exit_body(body: Node) -> void:
 		ui.set_message("Исследуйте весь лабиринт: %d%%" % int(round(coverage)))
 		return
 	if score < coins_total:
-		ui.set_message("Сначала соберите все жемчужины: %d/%d" % [coins_total, score, coins_total])
+		ui.set_message("Сначала соберите все жемчужины: %d/%d" % [score, coins_total])
 		return
 	if boss_required and not boss_is_defeated:
 		ui.set_message("Перед выходом победите босса")
