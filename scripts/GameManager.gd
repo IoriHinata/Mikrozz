@@ -37,6 +37,8 @@ var collected_coin_positions: Array[Vector2] = []
 var saved_maze_snapshot: Array = []
 var saved_ball_positions: Array[Vector2] = []
 var saved_ball_velocities: Array[Vector2] = []
+var saved_boss_defeated := false
+var saved_sequence_next := 0
 var camera: Camera2D
 var camera_zoom := 1.0
 var camera_pan_offset := Vector2.ZERO
@@ -59,6 +61,7 @@ func _ready() -> void:
 	add_child(safe_passage_timer)
 	_load_settings()
 	_load_progress()
+	camera.zoom = Vector2.ONE * camera_zoom
 	var records := ConfigFile.new()
 	if records.load("user://records.cfg") == OK:
 		best_score = int(records.get_value("records", "best_score", 0))
@@ -126,6 +129,8 @@ func _load_progress() -> void:
 		saved_maze_snapshot = cfg.get_value("state", "maze_snapshot", [])
 		saved_ball_positions = cfg.get_value("state", "ball_positions", [])
 		saved_ball_velocities = cfg.get_value("state", "ball_velocities", [])
+		saved_boss_defeated = bool(cfg.get_value("state", "boss_defeated", false))
+		saved_sequence_next = int(cfg.get_value("state", "sequence_next", 0))
 		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
 		camera_pan_offset = cfg.get_value("state", "camera_pan", Vector2.ZERO)
 	if not tutorial_completed:
@@ -154,6 +159,8 @@ func _save_progress(saved_level: int = -1) -> void:
 				velocities.append(player_body.linear_velocity)
 		cfg.set_value("state", "ball_positions", positions)
 		cfg.set_value("state", "ball_velocities", velocities)
+		cfg.set_value("state", "boss_defeated", boss_is_defeated)
+		cfg.set_value("state", "sequence_next", maze.sequence_next)
 		cfg.set_value("state", "camera_zoom", camera_zoom)
 		cfg.set_value("state", "camera_pan", camera_pan_offset)
 	else:
@@ -170,7 +177,6 @@ func _start_run() -> void:
 	restore_level_state = false
 	collected_coin_positions.clear()
 	saved_maze_snapshot.clear()
-	_save_progress()
 	_start_level()
 
 func _start_level() -> void:
@@ -185,6 +191,7 @@ func _start_level() -> void:
 	_save_progress()
 
 func _build_level() -> void:
+	var restoring_level := restore_level_state
 	if is_instance_valid(maze):
 		maze.queue_free()
 	maze = MazeScript.new()
@@ -198,19 +205,27 @@ func _build_level() -> void:
 	maze.level_mechanic_event.connect(_on_level_mechanic_event)
 	maze.boss_defeated.connect(_on_boss_defeated)
 	start_point = maze.start_position
-	if restore_level_state:
+	coins_total = _count_coins()
+	if restoring_level:
 		maze.apply_level_snapshot(saved_maze_snapshot)
 		maze.remove_collected_coins(collected_coin_positions)
+		maze.sequence_next = saved_sequence_next
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
 	boss_required = level >= 10
-	boss_is_defeated = false
-	coins_total = _count_coins()
+	boss_is_defeated = saved_boss_defeated if restoring_level else false
+	if not restoring_level:
+		var fit_x := viewport_size.x / maxf(1.0, maze.board_rect.size.x)
+		var fit_y := (viewport_size.y - 220.0) / maxf(1.0, maze.board_rect.size.y)
+		camera_zoom = clampf(minf(fit_x, fit_y), 0.18, 1.0)
+		camera.zoom = Vector2.ONE * camera_zoom
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
-	if restore_level_state:
+	if restoring_level:
 		_restore_player_bodies()
 		restore_level_state = false
+	if is_instance_valid(camera) and is_instance_valid(ball):
+		camera.global_position = ball.global_position + camera_pan_offset
 	ui.hide_result()
 	ui.set_message(_level_intro_message())
 	_update_hud()
