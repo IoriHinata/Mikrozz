@@ -11,6 +11,12 @@ signal pressure_button_activated(index: int)
 
 var pop_timer: Timer
 var active_level := 1
+var generation_seed := 0
+var theme_id := -1
+var theme_stage := 1
+var endless_mode := false
+var cell_size_x := 42.0
+var cell_size_y := 42.0
 var pop_spawn_cells: Array[Vector2i] = []
 var pop_spawner_position := Vector2.ZERO
 
@@ -45,24 +51,36 @@ var special_mechanic_count := 0
 signal level_mechanic_event(message: String, points: int)
 signal boss_defeated
 
-func generate(level_number: int, viewport_size: Vector2) -> void:
+func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) -> void:
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
 	gate_bodies.clear()
 	wall_count = 0
-	cols = 9 if level_number >= 5 else 7
-	rows = 11 if level_number >= 5 else 9
-	var usable := Vector2(viewport_size.x - 34.0, viewport_size.y - 238.0)
-	cell_size = floorf(minf(usable.x / cols, usable.y / rows))
-	cell_size = maxf(cell_size, 26.0)
-	var board_size := Vector2(cols * cell_size, rows * cell_size)
-	origin = Vector2((viewport_size.x - board_size.x) * 0.5, 92.0 + (usable.y - board_size.y) * 0.5)
+	active_level = level_number
+	generation_seed = seed_value if seed_value != 0 else randi()
+	seed(generation_seed)
+	endless_mode = level_number >= 11
+	var growth := maxi(0, level_number - 10)
+	cols = 9 if level_number < 5 else 11
+	rows = 11 if level_number < 5 else 13
+	if endless_mode:
+		cols = mini(128, 9 + int(float(growth) * 0.46))
+		rows = mini(128, 11 + int(float(growth) * 0.46))
+	cell_size = 42.0
+	var aspect_values: Array[float] = [1.0, 1.25, 0.8, 1.5, 0.667]
+	var aspect := aspect_values[posmod(maxi(0, level_number), aspect_values.size())]
+	cell_size_x = cell_size * aspect
+	cell_size_y = cell_size / aspect
+	var board_size := Vector2(cols * cell_size_x, rows * cell_size_y)
+	origin = Vector2(cell_size_x * 2.0, cell_size_y * 2.0)
 	board_rect = Rect2(origin, board_size)
 	palette = PALETTES[posmod(maxi(0, level_number), PALETTES.size())]
-	active_level = level_number
 	shape_id = 0 if level_number <= 0 else posmod(level_number - 1, 4)
+	theme_id = posmod(int((level_number - 11) / 4), 13) if endless_mode else -1
+	theme_stage = posmod(level_number - 11, 4) + 1 if endless_mode else 1
 	_build_cells()
+	_add_maze_loops()
 	_build_solution()
 	_build_geometry(level_number)
 	gate_button_states.clear()
@@ -131,15 +149,43 @@ func _build_cells() -> void:
 			cells[next_cell.y][next_cell.x]["visited"] = true
 			stack.append(next_cell)
 
+func _add_maze_loops() -> void:
+	var candidates: Array[Vector2i] = []
+	for y in range(rows):
+		for x in range(cols):
+			if not cells[y][x]["inside"]:
+				continue
+			var cell := Vector2i(x, y)
+			if x + 1 < cols and cells[y][x + 1]["inside"] and cells[y][x]["walls"][1]:
+				candidates.append(cell)
+			if y + 1 < rows and cells[y + 1][x]["inside"] and cells[y][x]["walls"][2]:
+				candidates.append(cell)
+	candidates.shuffle()
+	var loop_budget := mini(candidates.size(), maxi(2, int(float(candidates.size()) * 0.08)))
+	var opened := 0
+	for cell in candidates:
+		if opened >= loop_budget:
+			break
+		for direction in [1, 2]:
+			var offset: Vector2i = Vector2i.RIGHT if direction == 1 else Vector2i.DOWN
+			var neighbor: Vector2i = cell + offset
+			if neighbor.x < cols and neighbor.y < rows and cells[neighbor.y][neighbor.x]["inside"] and cells[cell.y][cell.x]["walls"][direction]:
+				cells[cell.y][cell.x]["walls"][direction] = false
+				cells[neighbor.y][neighbor.x]["walls"][(direction + 2) % 4] = false
+				opened += 1
+				break
+
 func _build_solution() -> void:
 	solution.clear()
+	var dirs := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
 	var queue: Array[Vector2i] = [start_cell]
+	var queue_index := 0
 	var previous: Dictionary = {start_cell: Vector2i(-1, -1)}
 	var distance: Dictionary = {start_cell: 0}
-	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 	var farthest := start_cell
-	while not queue.is_empty():
-		var current: Vector2i = queue.pop_front()
+	while queue_index < queue.size():
+		var current: Vector2i = queue[queue_index]
+		queue_index += 1
 		if int(distance[current]) > int(distance[farthest]):
 			farthest = current
 		for d in range(4):
@@ -150,12 +196,55 @@ func _build_solution() -> void:
 					distance[next_cell] = int(distance[current]) + 1
 					queue.append(next_cell)
 	target_cell = farthest
+	var stack: Array[Vector2i] = [start_cell]
+	var visited: Dictionary = {start_cell: true}
+	solution.append(start_cell)
+	while not stack.is_empty():
+		var current: Vector2i = stack.back()
+		var choices: Array[Vector2i] = []
+		for d in range(4):
+			var next_cell: Vector2i = current + dirs[d]
+			if next_cell.x >= 0 and next_cell.x < cols and next_cell.y >= 0 and next_cell.y < rows and cells[next_cell.y][next_cell.x]["inside"] and not visited.has(next_cell) and not cells[current.y][current.x]["walls"][d]:
+				choices.append(next_cell)
+		if choices.is_empty():
+			stack.pop_back()
+			if not stack.is_empty():
+				solution.append(stack.back())
+		else:
+			var next_cell: Vector2i = choices.pick_random()
+			visited[next_cell] = true
+			stack.append(next_cell)
+			solution.append(next_cell)
 	var cursor := target_cell
-	while cursor != Vector2i(-1, -1):
-		solution.push_front(cursor)
-		cursor = previous.get(cursor, Vector2i(-1, -1))
+	var return_path: Array[Vector2i] = []
+	while cursor != start_cell:
+		return_path.push_front(cursor)
+		cursor = previous.get(cursor, start_cell)
+	for path_cell in return_path:
+		solution.append(path_cell)
 	start_position = _cell_center(start_cell)
 	finish_position = _cell_center(target_cell)
+
+func _safe_neighbor_count(cell: Vector2i) -> int:
+	var count := 0
+	var dirs := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
+	for d in range(4):
+		var neighbor: Vector2i = cell + dirs[d]
+		if neighbor.x >= 0 and neighbor.x < cols and neighbor.y >= 0 and neighbor.y < rows and cells[neighbor.y][neighbor.x]["inside"] and not cells[cell.y][cell.x]["walls"][d]:
+			count += 1
+	return count
+
+func _ensure_three_open_sides(cell: Vector2i) -> void:
+	var dirs := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
+	for d in range(4):
+		if _safe_neighbor_count(cell) >= 3:
+			return
+		var neighbor: Vector2i = cell + dirs[d]
+		if neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows:
+			continue
+		if cells[neighbor.y][neighbor.x]["inside"] and cells[cell.y][cell.x]["walls"][d]:
+			cells[cell.y][cell.x]["walls"][d] = false
+			cells[neighbor.y][neighbor.x]["walls"][(d + 2) % 4] = false
 
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
@@ -197,7 +286,7 @@ func _build_objects(level_number: int) -> void:
 		coin.position = _cell_center(solution[path_index])
 		add_child(coin)
 		coin_body_created.emit(coin)
-	var hazard_count := mini(12, maxi(0, int((level_number - 1) * 1.15)))
+	var hazard_count := mini(12, maxi(0, int((level_number - 1) * 1.15))) if not endless_mode else 0
 	var candidates: Array[Vector2i] = []
 	for y in range(rows):
 		for x in range(cols):
@@ -206,12 +295,13 @@ func _build_objects(level_number: int) -> void:
 				candidates.append(cell)
 	candidates.shuffle()
 	for i in range(mini(hazard_count, candidates.size())):
-		var hazard := _make_hazard(_cell_center(candidates[i]), cell_size * 0.20, i % 2 == 0)
+		_ensure_three_open_sides(candidates[i])
+		var hazard := _make_hazard(_cell_center(candidates[i]), cell_size * 0.20, true)
 		add_child(hazard)
 		hazard_created.emit(hazard)
 
 	# Pressure plates are optional puzzle controls. The ball activates them by rolling over.
-	if level_number >= 2:
+	if level_number >= 2 and not endless_mode:
 		var plate_cells: Array[Vector2i] = []
 		for y in range(rows):
 			for x in range(cols):
@@ -228,7 +318,7 @@ func _build_objects(level_number: int) -> void:
 			plate.activated.connect(func(index: int): pressure_button_activated.emit(index))
 			pressure_button_created.emit(plate)
 	# A visible spawner periodically releases red bonus orbs. Tap them to pop them.
-	if level_number >= 2:
+	if level_number >= 2 and not endless_mode:
 		pop_spawn_cells.clear()
 		for y in range(rows):
 			for x in range(cols):
@@ -300,7 +390,7 @@ func _add_gate(at: Vector2, vertical: bool) -> void:
 	var body := StaticBody2D.new()
 	body.position = at
 	body.add_to_group("gates")
-	var size := Vector2(11.0, cell_size * 0.88) if vertical else Vector2(cell_size * 0.88, 11.0)
+	var size := Vector2(11.0, cell_size_y * 0.88) if vertical else Vector2(cell_size_x * 0.88, 11.0)
 	var shape := RectangleShape2D.new()
 	shape.size = size
 	var collision := CollisionShape2D.new()
@@ -334,13 +424,13 @@ func set_gate_open(index: int, opened: bool) -> void:
 			child.visible = not opened
 
 func _cell_center(cell: Vector2i) -> Vector2:
-	return origin + Vector2((cell.x + 0.5) * cell_size, (cell.y + 0.5) * cell_size)
+	return origin + Vector2((cell.x + 0.5) * cell_size_x, (cell.y + 0.5) * cell_size_y)
 
 func _wall_center(cell: Vector2i, d: int) -> Vector2:
 	return _cell_edge_center(cell, d)
 
 func _wall_size(d: int) -> Vector2:
-	return Vector2(12, cell_size + 5) if d == 1 else Vector2(cell_size + 5, 12)
+	return Vector2(12, cell_size_y + 5) if d == 1 else Vector2(cell_size_x + 5, 12)
 
 func _edge_key(a: Vector2i, b: Vector2i) -> String:
 	var first := a if (a.y < b.y or (a.y == b.y and a.x < b.x)) else b
@@ -348,24 +438,24 @@ func _edge_key(a: Vector2i, b: Vector2i) -> String:
 	return "%d,%d|%d,%d" % [first.x, first.y, second.x, second.y]
 
 func _draw() -> void:
+	# Seamless floor fill without visible tile borders or grid lines.
 	for y in range(rows):
 		for x in range(cols):
 			if not cells[y][x]["inside"]:
 				continue
-			var cell_position := _cell_center(Vector2i(x, y))
+			var cell := Vector2i(x, y)
+			var cell_position := _cell_center(cell)
 			if active_level >= 9 and cell_position.distance_to(reveal_position) > cell_size * 2.35:
 				continue
-			var rect := Rect2(origin + Vector2(x * cell_size + 1, y * cell_size + 1), Vector2(cell_size - 2, cell_size - 2))
-			draw_rect(rect, palette.floor.lightened(0.02), true)
-			draw_rect(rect, palette.wall.lightened(0.58), false, 1.0)
-			var cell := Vector2i(x, y)
+			var floor_rect := Rect2(origin + Vector2(x * cell_size_x, y * cell_size_y), Vector2(cell_size_x, cell_size_y))
+			draw_rect(floor_rect, palette.floor, true)
 			for d in range(4):
 				var neighbor: Vector2i = cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
 				var outside: bool = neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
 				if outside or ((d == 1 or d == 2) and cells[y][x]["walls"][d]):
 					var edge_center := _cell_edge_center(cell, d)
 					var horizontal := d == 0 or d == 2
-					var half := cell_size * 0.5
+					var half := cell_size_x * 0.5 if horizontal else cell_size_y * 0.5
 					var from := edge_center + (Vector2(-half, 0) if horizontal else Vector2(0, -half))
 					var to := edge_center + (Vector2(half, 0) if horizontal else Vector2(0, half))
 					draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
@@ -378,13 +468,13 @@ func _draw() -> void:
 func _cell_edge_center(cell: Vector2i, direction: int) -> Vector2:
 	var center := _cell_center(cell)
 	match direction:
-		0: return center + Vector2(0, -cell_size * 0.5)
-		1: return center + Vector2(cell_size * 0.5, 0)
-		2: return center + Vector2(0, cell_size * 0.5)
-		_: return center + Vector2(-cell_size * 0.5, 0)
+		0: return center + Vector2(0, -cell_size_y * 0.5)
+		1: return center + Vector2(cell_size_x * 0.5, 0)
+		2: return center + Vector2(0, cell_size_y * 0.5)
+		_: return center + Vector2(-cell_size_x * 0.5, 0)
 
 func _cell_edge_size(direction: int) -> Vector2:
-	return Vector2(cell_size + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size + 5)
+	return Vector2(cell_size_x + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size_y + 5)
 
 func _find_free_path_index(fraction: float) -> int:
 	if solution.size() < 5:
@@ -412,6 +502,9 @@ func _cell_is_occupied(cell: Vector2i) -> bool:
 
 func _build_special_mechanics(level_number: int) -> void:
 	sequence_next = 0
+	if endless_mode:
+		_build_endless_theme_mechanics(level_number)
+		return
 	special_mechanic_count = 0
 	if level_number >= 1 and solution.size() > 5:
 		var surface_index := _find_free_path_index(0.42)
@@ -522,6 +615,168 @@ func _build_special_mechanics(level_number: int) -> void:
 		add_child(boss)
 		boss.defeated.connect(func(): boss_defeated.emit())
 		special_mechanic_count += 1
+
+func _build_endless_theme_mechanics(level_number: int) -> void:
+	var candidates: Array[Vector2i] = []
+	for y in range(rows):
+		for x in range(cols):
+			var cell := Vector2i(x, y)
+			if cells[y][x]["inside"] and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
+				candidates.append(cell)
+	candidates.shuffle()
+	var route_indices: Array[int] = []
+	for i in range(2, solution.size() - 2):
+		var route_cell: Vector2i = solution[i]
+		if route_cell != start_cell and route_cell != target_cell and not _cell_is_occupied(route_cell) and (route_indices.is_empty() or route_cell != solution[route_indices.back()]):
+			route_indices.append(i)
+	var count := 1 + theme_stage
+	match theme_id:
+		0:
+			var placed := 0
+			for cell in candidates:
+				_ensure_three_open_sides(cell)
+				if _safe_neighbor_count(cell) >= 3:
+					var hazard := _make_hazard(_cell_center(cell), cell_size * 0.20, true)
+					add_child(hazard)
+					hazard_created.emit(hazard)
+					placed += 1
+					special_mechanic_count += 1
+					if placed >= count:
+						break
+		1, 2, 3:
+			var mode := "ice" if theme_id == 1 else ("sand" if theme_id == 2 else "sticky")
+			for i in range(mini(count, route_indices.size())):
+				var surface := SurfaceZone.new()
+				surface.mode = mode
+				surface.position = _cell_center(solution[route_indices[i]])
+				surface.size_radius = cell_size * 0.34
+				add_child(surface)
+				special_mechanic_count += 1
+		4:
+			for pair_index in range(mini(theme_stage, int(candidates.size() / 2))):
+				var portal_a := PortalPad.new()
+				var portal_b := PortalPad.new()
+				portal_a.position = _cell_center(candidates[pair_index * 2])
+				portal_b.position = _cell_center(candidates[pair_index * 2 + 1])
+				portal_a.destination = portal_b.position
+				portal_b.destination = portal_a.position
+				add_child(portal_a)
+				add_child(portal_b)
+				special_mechanic_count += 1
+		5:
+			for i in range(mini(count, route_indices.size())):
+				var conveyor := ConveyorZone.new()
+				conveyor.position = _cell_center(solution[route_indices[i]])
+				conveyor.direction = Vector2.RIGHT if (i + theme_stage) % 2 == 0 else Vector2.LEFT
+				add_child(conveyor)
+				special_mechanic_count += 1
+		6:
+			for i in range(mini(count, route_indices.size())):
+				var spring := SpringPad.new()
+				spring.position = _cell_center(solution[route_indices[i]])
+				spring.kick_direction = [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT][posmod(i + theme_stage, 4)]
+				add_child(spring)
+				special_mechanic_count += 1
+		7:
+			for i in range(mini(count, route_indices.size())):
+				var barrier := MovingBarrier.new()
+				barrier.position = _cell_center(solution[route_indices[i]])
+				barrier.travel = cell_size * 0.18
+				barrier.speed = 1.0 + float(theme_stage) * 0.22
+				barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
+				add_child(barrier)
+				special_mechanic_count += 1
+		8:
+			for i in range(mini(count, route_indices.size())):
+				var magnet := MagnetField.new()
+				magnet.position = _cell_center(solution[route_indices[i]])
+				magnet.radius = cell_size * (1.0 + float(theme_stage) * 0.12)
+				magnet.strength = 75.0 + float(theme_stage) * 18.0
+				add_child(magnet)
+				special_mechanic_count += 1
+		9:
+			for i in range(mini(count, route_indices.size())):
+				var bridge := RotatingBridge.new()
+				bridge.position = _cell_center(solution[route_indices[i]])
+				bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
+				bridge.rotation_speed = 0.65 + float(theme_stage) * 0.12
+				add_child(bridge)
+				special_mechanic_count += 1
+		10:
+			var placed_lasers := 0
+			for cell in candidates:
+				_ensure_three_open_sides(cell)
+				if _safe_neighbor_count(cell) >= 3:
+					var laser := LaserHazard.new()
+					laser.position = _cell_center(cell)
+					add_child(laser)
+					hazard_created.emit(laser)
+					placed_lasers += 1
+					special_mechanic_count += 1
+					if placed_lasers >= count:
+						break
+		11:
+			active_level = maxi(active_level, 9)
+			special_mechanic_count = 1
+		12:
+			for i in range(mini(3, route_indices.size())):
+				var plate := SequencePlate.new()
+				plate.plate_index = i
+				plate.position = _cell_center(solution[route_indices[i]])
+				plate.sequence_owner = self
+				add_child(plate)
+				special_mechanic_count += 1
+
+func get_level_snapshot() -> Array:
+	var snapshot: Array = []
+	for i in range(get_child_count()):
+		var child := get_child(i)
+		if not child is Node2D:
+			continue
+		var entry: Dictionary = {"index": i, "position": (child as Node2D).position, "rotation": (child as Node2D).rotation, "visible": (child as Node2D).visible}
+		if child is RigidBody2D:
+			entry["velocity"] = (child as RigidBody2D).linear_velocity
+		if child is Area2D:
+			entry["monitoring"] = (child as Area2D).monitoring
+		for property_name in ["triggered", "defeated", "hits", "health", "sequence_next"]:
+			for property_info in child.get_property_list():
+				if String(property_info.name) == property_name:
+					entry[property_name] = child.get(property_name)
+					break
+		snapshot.append(entry)
+	return snapshot
+
+func apply_level_snapshot(snapshot: Array) -> void:
+	for entry in snapshot:
+		var index := int(entry.get("index", -1))
+		if index < 0 or index >= get_child_count():
+			continue
+		var child := get_child(index)
+		if not child is Node2D:
+			continue
+		(child as Node2D).position = entry.get("position", (child as Node2D).position)
+		(child as Node2D).rotation = float(entry.get("rotation", (child as Node2D).rotation))
+		(child as Node2D).visible = bool(entry.get("visible", (child as Node2D).visible))
+		if child is RigidBody2D and entry.has("velocity"):
+			(child as RigidBody2D).linear_velocity = entry["velocity"]
+		if child is Area2D and entry.has("monitoring"):
+			(child as Area2D).set_deferred("monitoring", bool(entry["monitoring"]))
+		for property_name in ["triggered", "defeated", "hits", "health", "sequence_next"]:
+			if entry.has(property_name):
+				for property_info in child.get_property_list():
+					if String(property_info.name) == property_name:
+						child.set(property_name, entry[property_name])
+						break
+		if child.has_method("queue_redraw"):
+			child.queue_redraw()
+
+func remove_collected_coins(positions: Array) -> void:
+	for child in get_children():
+		if child is RigidBody2D and child.is_in_group("coins"):
+			for saved_position in positions:
+				if (child as Node2D).position.distance_to(saved_position) < 1.0:
+					child.queue_free()
+					break
 
 func activate_sequence_plate(index: int) -> void:
 	if index == sequence_next:
