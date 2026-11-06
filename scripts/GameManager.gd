@@ -31,10 +31,28 @@ var safe_passage_timer: Timer
 var music_volume := 0.32
 var sfx_volume := 0.75
 var vibration_enabled := true
+var level_seed := 0
+var restore_level_state := false
+var collected_coin_positions: Array[Vector2] = []
+var saved_maze_snapshot: Array = []
+var saved_ball_positions: Array[Vector2] = []
+var saved_ball_velocities: Array[Vector2] = []
+var camera: Camera2D
+var camera_zoom := 1.0
+var camera_pan_offset := Vector2.ZERO
+var autosave_elapsed := 0.0
+var touch_points: Dictionary = {}
+var pinch_distance := 0.0
+var mouse_pan_active := false
 
 func _ready() -> void:
 	randomize()
 	viewport_size = get_viewport_rect().size
+	camera = Camera2D.new()
+	camera.name = "MazeCamera"
+	camera.enabled = true
+	camera.position = viewport_size * 0.5
+	add_child(camera)
 	safe_passage_timer = Timer.new()
 	safe_passage_timer.one_shot = true
 	safe_passage_timer.timeout.connect(_restore_current_safe_hazards)
@@ -63,6 +81,9 @@ func _ready() -> void:
 	ui.settings_changed.connect(_on_setting_changed)
 	ui.settings_pause_changed.connect(_on_settings_pause_changed)
 	ui.tutorial_finished.connect(_on_tutorial_finished)
+	ui.regenerate_requested.connect(_regenerate_level)
+	ui.camera_zoom_requested.connect(_on_camera_zoom)
+	ui.camera_center_requested.connect(_center_camera)
 	tilt.sensor_status_changed.connect(_on_sensor_status)
 	_start_level()
 	if level == 0:
@@ -91,12 +112,24 @@ func _save_settings() -> void:
 
 func _load_progress() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(PROGRESS_PATH) == OK:
-		level = maxi(0, int(cfg.get_value("progress", "level", 0)))
-		total_run_score = maxi(0, int(cfg.get_value("progress", "total_score", 0)))
-		tutorial_completed = bool(cfg.get_value("progress", "tutorial_completed", false))
-		if not tutorial_completed:
-			level = 0
+	if cfg.load(PROGRESS_PATH) != OK:
+		return
+	level = maxi(0, int(cfg.get_value("progress", "level", 0)))
+	total_run_score = maxi(0, int(cfg.get_value("progress", "total_score", 0)))
+	tutorial_completed = bool(cfg.get_value("progress", "tutorial_completed", false))
+	lives = clampi(int(cfg.get_value("state", "lives", 3)), 1, 3)
+	level_seed = int(cfg.get_value("state", "seed", 0))
+	restore_level_state = bool(cfg.get_value("state", "available", false)) and level_seed != 0
+	if restore_level_state:
+		score = maxi(0, int(cfg.get_value("state", "score", 0)))
+		collected_coin_positions = cfg.get_value("state", "collected_coins", [])
+		saved_maze_snapshot = cfg.get_value("state", "maze_snapshot", [])
+		saved_ball_positions = cfg.get_value("state", "ball_positions", [])
+		saved_ball_velocities = cfg.get_value("state", "ball_velocities", [])
+		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
+		camera_pan_offset = cfg.get_value("state", "camera_pan", Vector2.ZERO)
+	if not tutorial_completed:
+		level = 0
 
 func _save_progress(saved_level: int = -1) -> void:
 	var cfg := ConfigFile.new()
@@ -105,6 +138,26 @@ func _save_progress(saved_level: int = -1) -> void:
 	cfg.set_value("progress", "best_score", best_score)
 	cfg.set_value("progress", "last_level_score", score)
 	cfg.set_value("progress", "tutorial_completed", tutorial_completed)
+	cfg.set_value("state", "lives", lives)
+	var keep_level_state := saved_level < 0 and is_instance_valid(maze) and not level_locked
+	cfg.set_value("state", "available", keep_level_state)
+	if keep_level_state:
+		cfg.set_value("state", "seed", level_seed)
+		cfg.set_value("state", "score", score)
+		cfg.set_value("state", "collected_coins", collected_coin_positions)
+		cfg.set_value("state", "maze_snapshot", maze.get_level_snapshot())
+		var positions: Array[Vector2] = []
+		var velocities: Array[Vector2] = []
+		for player_body in _get_player_bodies():
+			if is_instance_valid(player_body):
+				positions.append(player_body.global_position)
+				velocities.append(player_body.linear_velocity)
+		cfg.set_value("state", "ball_positions", positions)
+		cfg.set_value("state", "ball_velocities", velocities)
+		cfg.set_value("state", "camera_zoom", camera_zoom)
+		cfg.set_value("state", "camera_pan", camera_pan_offset)
+	else:
+		cfg.set_value("state", "available", false)
 	var error := cfg.save(PROGRESS_PATH)
 	if error != OK:
 		push_warning("Не удалось сохранить прогресс: %s" % error)
@@ -113,14 +166,23 @@ func _start_run() -> void:
 	level = 1 if tutorial_completed else 0
 	lives = 3
 	total_run_score = 0
+	level_seed = randi()
+	restore_level_state = false
+	collected_coin_positions.clear()
+	saved_maze_snapshot.clear()
 	_save_progress()
 	_start_level()
 
 func _start_level() -> void:
 	level_locked = false
-	score = 0
-	_save_progress()
+	if not restore_level_state:
+		score = 0
+		level_seed = randi()
+		collected_coin_positions.clear()
+		saved_maze_snapshot.clear()
+		camera_pan_offset = Vector2.ZERO
 	_build_level()
+	_save_progress()
 
 func _build_level() -> void:
 	if is_instance_valid(maze):
@@ -130,12 +192,15 @@ func _build_level() -> void:
 	maze.hazard_created.connect(_connect_hazard)
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
-	maze.generate(level, viewport_size)
+	maze.generate(level, viewport_size, level_seed)
 	maze.pressure_button_activated.connect(_on_pressure_button_activated)
 	maze.pop_ball_popped.connect(_on_pop_ball_popped)
 	maze.level_mechanic_event.connect(_on_level_mechanic_event)
 	maze.boss_defeated.connect(_on_boss_defeated)
 	start_point = maze.start_position
+	if restore_level_state:
+		maze.apply_level_snapshot(saved_maze_snapshot)
+		maze.remove_collected_coins(collected_coin_positions)
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
 	boss_required = level >= 10
@@ -143,6 +208,9 @@ func _build_level() -> void:
 	coins_total = _count_coins()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
+	if restore_level_state:
+		_restore_player_bodies()
+		restore_level_state = false
 	ui.hide_result()
 	ui.set_message(_level_intro_message())
 	_update_hud()
@@ -200,6 +268,7 @@ func _connect_coin(coin: RigidBody2D) -> void:
 
 func _on_coin_body(body: Node, coin: Node2D) -> void:
 	if body.is_in_group("player") and is_instance_valid(coin) and not level_locked:
+		collected_coin_positions.append(coin.position)
 		score += 1
 		total_run_score += 1
 		coin.queue_free()
@@ -267,7 +336,7 @@ func _respawn_all() -> void:
 	maze.hazard_created.connect(_connect_hazard)
 	maze.exit_created.connect(_connect_exit)
 	maze.coin_body_created.connect(_connect_coin)
-	maze.generate(level, viewport_size)
+	maze.generate(level, viewport_size, level_seed)
 	maze.pressure_button_activated.connect(_on_pressure_button_activated)
 	maze.pop_ball_popped.connect(_on_pop_ball_popped)
 	maze.level_mechanic_event.connect(_on_level_mechanic_event)
@@ -279,6 +348,8 @@ func _respawn_all() -> void:
 	boss_is_defeated = false
 	coins_total = _count_coins()
 	score = 0
+	collected_coin_positions.clear()
+	saved_maze_snapshot.clear()
 	_save_progress()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
@@ -354,7 +425,23 @@ func _update_hud() -> void:
 
 func _next_level() -> void:
 	level += 1
+	restore_level_state = false
+	level_seed = randi()
+	collected_coin_positions.clear()
+	saved_maze_snapshot.clear()
 	_start_level()
+
+func _regenerate_level() -> void:
+	if level_locked:
+		return
+	level_seed = randi()
+	score = 0
+	collected_coin_positions.clear()
+	saved_maze_snapshot.clear()
+	restore_level_state = false
+	camera_pan_offset = Vector2.ZERO
+	_start_level()
+	ui.set_message("Создан новый вариант уровня")
 
 func _restart_run() -> void:
 	_start_run()
@@ -390,6 +477,81 @@ func _on_settings_pause_changed(paused: bool) -> void:
 	get_tree().paused = paused
 	if not paused:
 		audio.play_ui()
+
+func _get_player_bodies() -> Array:
+	var bodies: Array = []
+	if is_instance_valid(ball):
+		bodies.append(ball)
+	for extra in extra_balls:
+		if is_instance_valid(extra):
+			bodies.append(extra)
+	return bodies
+
+func _restore_player_bodies() -> void:
+	var bodies := _get_player_bodies()
+	for i in range(mini(bodies.size(), saved_ball_positions.size())):
+		bodies[i].global_position = saved_ball_positions[i]
+		if i < saved_ball_velocities.size():
+			bodies[i].linear_velocity = saved_ball_velocities[i]
+	saved_ball_positions.clear()
+	saved_ball_velocities.clear()
+
+func _on_camera_zoom(factor: float) -> void:
+	camera_zoom = clampf(camera_zoom * factor, 0.18, 2.8)
+	if is_instance_valid(camera):
+		camera.zoom = Vector2.ONE * camera_zoom
+	_save_progress()
+
+func _center_camera() -> void:
+	camera_pan_offset = Vector2.ZERO
+	if is_instance_valid(ball) and is_instance_valid(camera):
+		camera.global_position = ball.global_position
+	_save_progress()
+
+func _process(delta: float) -> void:
+	if is_instance_valid(camera) and is_instance_valid(ball):
+		var target := ball.global_position + camera_pan_offset
+		camera.global_position = camera.global_position.lerp(target, minf(1.0, delta * 8.0))
+	autosave_elapsed += delta
+	if autosave_elapsed >= 2.0:
+		autosave_elapsed = 0.0
+		_save_progress()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			touch_points[touch.index] = touch.position
+			if touch_points.size() == 2:
+				var values: Array = touch_points.values()
+				pinch_distance = values[0].distance_to(values[1])
+		else:
+			touch_points.erase(touch.index)
+			if touch_points.size() < 2:
+				pinch_distance = 0.0
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if touch_points.has(drag.index):
+			touch_points[drag.index] = drag.position
+		if touch_points.size() >= 2:
+			var values: Array = touch_points.values()
+			var next_distance: float = values[0].distance_to(values[1])
+			if pinch_distance > 1.0:
+				camera_zoom = clampf(camera_zoom * next_distance / pinch_distance, 0.18, 2.8)
+				camera.zoom = Vector2.ONE * camera_zoom
+			pinch_distance = next_distance
+		elif touch_points.size() == 1:
+			camera_pan_offset -= drag.relative / camera_zoom
+	elif event is InputEventMouseButton:
+		var mouse_button := event as InputEventMouseButton
+		if mouse_button.button_index == MOUSE_BUTTON_MIDDLE:
+			mouse_pan_active = mouse_button.pressed
+		elif mouse_button.pressed and mouse_button.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_on_camera_zoom(1.15)
+		elif mouse_button.pressed and mouse_button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_on_camera_zoom(0.87)
+	elif event is InputEventMouseMotion and mouse_pan_active:
+		camera_pan_offset -= (event as InputEventMouseMotion).relative / camera_zoom
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
