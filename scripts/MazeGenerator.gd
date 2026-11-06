@@ -67,6 +67,13 @@ func generate(level_number: int, viewport_size: Vector2) -> void:
 	_build_objects(level_number)
 	queue_redraw()
 
+func _process(_delta: float) -> void:
+	if active_level >= 9:
+		var players := get_tree().get_nodes_in_group("player")
+		if not players.is_empty() and is_instance_valid(players[0]):
+			reveal_position = players[0].global_position
+			queue_redraw()
+
 func _build_cells() -> void:
 	cells.clear()
 	var center := Vector2((cols - 1) * 0.5, (rows - 1) * 0.5)
@@ -232,111 +239,6 @@ func _build_objects(level_number: int) -> void:
 			pop_timer.autostart = true
 			pop_timer.timeout.connect(_spawn_pop_ball)
 			add_child(pop_timer)
-func _process(_delta: float) -> void:
-	if active_level >= 9:
-		var players := get_tree().get_nodes_in_group("player")
-		if not players.is_empty() and is_instance_valid(players[0]):
-			reveal_position = players[0].global_position
-			queue_redraw()
-
-func _build_special_mechanics(level_number: int) -> void:
-	sequence_next = 0
-	special_mechanic_count = 0
-	if level_number >= 1 and solution.size() > 5:
-		var surface_index := clampi(int(solution.size() * 0.42), 2, solution.size() - 3)
-		var surface := SurfaceZone.new()
-		surface.mode = ["ice", "sand", "conveyor", "sticky", "ice"][posmod(level_number - 1, 5)]
-		surface.position = _cell_center(solution[surface_index])
-		surface.size_radius = cell_size * 0.34
-		add_child(surface)
-		special_mechanic_count += 1
-	if level_number >= 2:
-		var branches: Array[Vector2i] = []
-		for y in range(rows):
-			for x in range(cols):
-				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
-					branches.append(cell)
-		if branches.size() >= 2:
-			branches.shuffle()
-			var portal_a := PortalPad.new()
-			var portal_b := PortalPad.new()
-			portal_a.position = _cell_center(branches[0])
-			portal_b.position = _cell_center(branches[1])
-			portal_a.destination = portal_b.position
-			portal_b.destination = portal_a.position
-			add_child(portal_a)
-			add_child(portal_b)
-			special_mechanic_count += 1
-	if level_number >= 3 and solution.size() > 6:
-		var conveyor := ConveyorZone.new()
-		conveyor.position = _cell_center(solution[clampi(int(solution.size() * 0.32), 2, solution.size() - 3)])
-		conveyor.direction = Vector2.RIGHT if level_number % 2 == 1 else Vector2.LEFT
-		add_child(conveyor)
-		special_mechanic_count += 1
-	if level_number >= 4 and solution.size() > 7:
-		var spring := SpringPad.new()
-		spring.position = _cell_center(solution[clampi(int(solution.size() * 0.58), 2, solution.size() - 3)])
-		spring.kick_direction = Vector2.UP if level_number % 2 == 0 else Vector2.RIGHT
-		add_child(spring)
-		special_mechanic_count += 1
-	if level_number >= 5 and solution.size() > 8:
-		var barrier := MovingBarrier.new()
-		barrier.position = _cell_center(solution[clampi(int(solution.size() * 0.72), 2, solution.size() - 3)])
-		barrier.travel = cell_size * 0.22
-		barrier.speed = 1.25 + float(level_number) * 0.04
-		barrier.barrier_size = Vector2(cell_size * 0.42, 9.0)
-		add_child(barrier)
-		special_mechanic_count += 1
-	if level_number >= 6:
-		var magnet := MagnetField.new()
-		magnet.position = _cell_center(solution[clampi(int(solution.size() * 0.50), 2, solution.size() - 3)])
-		magnet.radius = cell_size * 2.0
-		magnet.strength = 170.0
-		add_child(magnet)
-		special_mechanic_count += 1
-	if level_number >= 7:
-		var laser_cells: Array[Vector2i] = []
-		for y in range(rows):
-			for x in range(cols):
-				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
-					laser_cells.append(cell)
-		if not laser_cells.is_empty():
-			laser_cells.shuffle()
-			var laser := LaserHazard.new()
-			laser.position = _cell_center(laser_cells[0])
-			add_child(laser)
-			hazard_created.emit(laser)
-			special_mechanic_count += 1
-	if level_number >= 8 and solution.size() > 8:
-		for i in range(3):
-			var plate := SequencePlate.new()
-			plate.plate_index = i
-			plate.position = _cell_center(solution[clampi(int(solution.size() * float(i + 1) / 4.0), 2, solution.size() - 3)])
-			plate.sequence_owner = self
-			add_child(plate)
-		special_mechanic_count += 1
-	if level_number >= 10:
-		var boss := BossOrb.new()
-		boss.position = _cell_center(solution[clampi(int(solution.size() * 0.68), 2, solution.size() - 3)])
-		add_child(boss)
-		hazard_created.emit(boss)
-		boss.defeated.connect(func(): boss_defeated.emit())
-		special_mechanic_count += 1
-
-func activate_sequence_plate(index: int) -> void:
-	if index == sequence_next:
-		sequence_next += 1
-		if sequence_next >= 3:
-			level_mechanic_event.emit("Sequence solved! +12", 12)
-			sequence_next = 0
-		else:
-			level_mechanic_event.emit("Correct plate %d/3" % sequence_next, 0)
-	else:
-		sequence_next = 0
-		level_mechanic_event.emit("Wrong order — sequence reset", 0)
-
 	_build_special_mechanics(level_number)
 	var exit_area := Area2D.new()
 	exit_area.name = "Exit"
@@ -353,20 +255,7 @@ func activate_sequence_plate(index: int) -> void:
 func _spawn_pop_ball() -> void:
 	if pop_spawn_cells.is_empty() or not is_inside_tree():
 		return
-	var existing_orbs := get_tree().get_nodes_in_group("pop_balls")
-	if existing_orbs.size() >= 3:
-		return
 	var red_ball := RedPopBall.new()
-	var roll := randf()
-	if roll < 0.08:
-		red_ball.orb_type = "gold"
-		red_ball.score_value = 10
-	elif roll < 0.22:
-		red_ball.orb_type = "boost"
-		red_ball.score_value = 4
-	elif roll < 0.32:
-		red_ball.orb_type = "volatile"
-		red_ball.score_value = 5
 	red_ball.position = pop_spawner_position
 	red_ball.linear_velocity = Vector2(randf_range(-45.0, 45.0), randf_range(-45.0, 45.0))
 	add_child(red_ball)
@@ -479,6 +368,105 @@ func _cell_edge_center(cell: Vector2i, direction: int) -> Vector2:
 func _cell_edge_size(direction: int) -> Vector2:
 	return Vector2(cell_size + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size + 5)
 
+func _build_special_mechanics(level_number: int) -> void:
+	sequence_next = 0
+	special_mechanic_count = 0
+	if level_number >= 1 and solution.size() > 5:
+		var surface_index := clampi(int(solution.size() * 0.42), 2, solution.size() - 3)
+		var surface := SurfaceZone.new()
+		surface.mode = ["ice", "sand", "sticky", "ice", "sand"][posmod(level_number - 1, 5)]
+		surface.position = _cell_center(solution[surface_index])
+		surface.size_radius = cell_size * 0.34
+		add_child(surface)
+		special_mechanic_count += 1
+	if level_number >= 2:
+		var branches: Array[Vector2i] = []
+		for y in range(rows):
+			for x in range(cols):
+				var cell := Vector2i(x, y)
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+					branches.append(cell)
+		if branches.size() >= 2:
+			branches.shuffle()
+			var portal_a := PortalPad.new()
+			var portal_b := PortalPad.new()
+			portal_a.position = _cell_center(branches[0])
+			portal_b.position = _cell_center(branches[1])
+			portal_a.destination = portal_b.position
+			portal_b.destination = portal_a.position
+			add_child(portal_a)
+			add_child(portal_b)
+			special_mechanic_count += 1
+	if level_number >= 3 and solution.size() > 6:
+		var conveyor := ConveyorZone.new()
+		conveyor.position = _cell_center(solution[clampi(int(solution.size() * 0.32), 2, solution.size() - 3)])
+		conveyor.direction = Vector2.RIGHT if level_number % 2 == 1 else Vector2.LEFT
+		add_child(conveyor)
+		special_mechanic_count += 1
+	if level_number >= 4 and solution.size() > 7:
+		var spring := SpringPad.new()
+		spring.position = _cell_center(solution[clampi(int(solution.size() * 0.58), 2, solution.size() - 3)])
+		spring.kick_direction = Vector2.UP if level_number % 2 == 0 else Vector2.RIGHT
+		add_child(spring)
+		special_mechanic_count += 1
+	if level_number >= 5 and solution.size() > 8:
+		var barrier := MovingBarrier.new()
+		barrier.position = _cell_center(solution[clampi(int(solution.size() * 0.72), 2, solution.size() - 3)])
+		barrier.travel = cell_size * 0.22
+		barrier.speed = 1.25 + float(level_number) * 0.04
+		barrier.barrier_size = Vector2(cell_size * 0.42, 9.0)
+		add_child(barrier)
+		special_mechanic_count += 1
+	if level_number >= 6:
+		var magnet := MagnetField.new()
+		magnet.position = _cell_center(solution[clampi(int(solution.size() * 0.50), 2, solution.size() - 3)])
+		magnet.radius = cell_size * 1.7
+		magnet.strength = 130.0
+		add_child(magnet)
+		special_mechanic_count += 1
+	if level_number >= 7:
+		var laser_cells: Array[Vector2i] = []
+		for y in range(rows):
+			for x in range(cols):
+				var cell := Vector2i(x, y)
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+					laser_cells.append(cell)
+		if not laser_cells.is_empty():
+			laser_cells.shuffle()
+			var laser := LaserHazard.new()
+			laser.position = _cell_center(laser_cells[0])
+			add_child(laser)
+			hazard_created.emit(laser)
+			special_mechanic_count += 1
+	if level_number >= 8 and solution.size() > 8:
+		for i in range(3):
+			var plate := SequencePlate.new()
+			plate.plate_index = i
+			plate.position = _cell_center(solution[clampi(int(solution.size() * float(i + 1) / 4.0), 2, solution.size() - 3)])
+			plate.sequence_owner = self
+			add_child(plate)
+		special_mechanic_count += 1
+	if level_number >= 10:
+		var boss := BossOrb.new()
+		boss.position = _cell_center(solution[clampi(int(solution.size() * 0.68), 2, solution.size() - 3)])
+		add_child(boss)
+		hazard_created.emit(boss)
+		boss.defeated.connect(func(): boss_defeated.emit())
+		special_mechanic_count += 1
+
+func activate_sequence_plate(index: int) -> void:
+	if index == sequence_next:
+		sequence_next += 1
+		if sequence_next >= 3:
+			level_mechanic_event.emit("Sequence solved! +12", 12)
+			sequence_next = 0
+		else:
+			level_mechanic_event.emit("Correct plate %d/3" % sequence_next, 0)
+	else:
+		sequence_next = 0
+		level_mechanic_event.emit("Wrong order — sequence reset", 0)
+
+
 class HazardVisual:
 	extends Node2D
 	var radius := 10.0
@@ -534,8 +522,6 @@ class PopSpawnerVisual:
 		draw_circle(Vector2.ZERO, 12.0, Color("#59616d"))
 		draw_circle(Vector2.ZERO, 7.0, Color("#ef7880"))
 		draw_arc(Vector2.ZERO, 15.0, 0.0, TAU, 32, Color("#8c98a5"), 3.0)
-
-
 
 class SurfaceZone:
 	extends Area2D
@@ -602,9 +588,15 @@ class ConveyorZone:
 		var collision := CollisionShape2D.new()
 		collision.shape = shape
 		add_child(collision)
-		body_entered.connect(func(body: Node): if body is RigidBody2D and body.is_in_group("player"): active_body = body)
-		body_exited.connect(func(body: Node): if body == active_body: active_body = null)
+		body_entered.connect(_on_enter)
+		body_exited.connect(_on_exit)
 		queue_redraw()
+	func _on_enter(body: Node) -> void:
+		if body is RigidBody2D and body.is_in_group("player"):
+			active_body = body
+	func _on_exit(body: Node) -> void:
+		if body == active_body:
+			active_body = null
 	func _physics_process(_delta: float) -> void:
 		if is_instance_valid(active_body):
 			active_body.apply_central_force(direction * 185.0)
@@ -640,7 +632,9 @@ class MovingBarrier:
 	var speed := 1.0
 	var barrier_size := Vector2(18.0, 8.0)
 	var elapsed := 0.0
+	var initial_position := Vector2.ZERO
 	func _ready() -> void:
+		initial_position = position
 		sync_to_physics = true
 		var shape := RectangleShape2D.new()
 		shape.size = barrier_size
@@ -650,18 +644,17 @@ class MovingBarrier:
 		queue_redraw()
 	func _physics_process(delta: float) -> void:
 		elapsed += delta
-		position.x += 0.0
-		position = Vector2(position.x, position.y + sin(elapsed * speed) * travel * delta)
+		position = initial_position + Vector2(0, sin(elapsed * speed) * travel)
 	func _draw() -> void:
 		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#b87985"), true, true, 2.0)
 
 class MagnetField:
 	extends Node2D
 	var radius := 70.0
-	var strength := 170.0
+	var strength := 130.0
 	func _physics_process(_delta: float) -> void:
 		for player in get_tree().get_nodes_in_group("player"):
-			if not is_instance_valid(player) or not player is RigidBody2D:
+			if not is_instance_valid(player) or not (player is RigidBody2D):
 				continue
 			var offset: Vector2 = global_position - player.global_position
 			var distance := offset.length()
@@ -731,7 +724,6 @@ class BossOrb:
 	signal defeated
 	var health := 3
 	var target: Node2D
-	var elapsed := 0.0
 	func _ready() -> void:
 		add_to_group("hazard")
 		input_pickable = true
@@ -744,7 +736,6 @@ class BossOrb:
 		input_event.connect(_on_input)
 		queue_redraw()
 	func _physics_process(delta: float) -> void:
-		elapsed += delta
 		if not is_instance_valid(target):
 			var players := get_tree().get_nodes_in_group("player")
 			if not players.is_empty():
@@ -752,7 +743,7 @@ class BossOrb:
 		if is_instance_valid(target):
 			global_position = global_position.move_toward(target.global_position, 24.0 * delta)
 	func _on_body(body: Node) -> void:
-		if body.is_in_group("player"):
+		if body.is_in_group("player") and body is RigidBody2D:
 			body.apply_central_impulse((body.global_position - global_position).normalized() * 100.0)
 	func _on_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
 		var tapped: bool = event is InputEventScreenTouch and event.pressed
@@ -774,6 +765,8 @@ class BossOrb:
 class RedPopBall:
 	extends RigidBody2D
 	signal popped
+	var orb_type := "normal"
+	var score_value := 2
 	func _ready() -> void:
 		add_to_group("pop_balls")
 		gravity_scale = 0.0
@@ -789,12 +782,11 @@ class RedPopBall:
 		input_event.connect(_on_input_event)
 		queue_redraw()
 	func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-		var orb_type := "normal"
-	var score_value := 2
-	var tapped_once := false
-	var tapped: bool = false
-	func _input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-		_on_input_event(_viewport, event, _shape_idx)
+		var tapped: bool = event is InputEventScreenTouch and event.pressed
+		tapped = tapped or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+		if tapped:
+			popped.emit()
+			queue_free()
 	func _draw() -> void:
 		var orb_color := Color("#efbd5b") if orb_type == "gold" else Color("#74bfe5") if orb_type == "boost" else Color("#f05e68")
 		draw_circle(Vector2(0, 2), 11.0, Color("#8e3d48"))
