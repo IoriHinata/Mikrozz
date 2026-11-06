@@ -11,7 +11,7 @@ signal settings_pause_changed(paused: bool)
 signal tutorial_finished
 var tutorial_panel: PanelContainer
 var tutorial_page := 0
-const TUTORIAL_PAGES := [["WELCOME TO MIKROZZ", "Guide the pearl through the maze by gently tilting your phone. This short training room teaches the controls."], ["CALIBRATE YOUR PHONE", "Place your phone flat and still, then tap CALIBRATE. The sensor indicator at the top shows whether tilt control is active."], ["MOVE AND STEER", "Tilt the phone slowly in the direction you want the ball to roll. Small movements are enough; avoid sudden shakes. The arrows in the bottom panel are a touch-control fallback."], ["USE YOUR FINGERS", "Hold gate buttons in the bottom panel while steering. Later levels require holding more than one button at once, so use several fingers and plan your grip."], ["PUZZLES AND SPECIAL OBJECTS", "Glowing plates award bonuses, portals move you between side passages, and ice, sand, conveyors and springs change the ball's motion. Later levels add moving barriers, magnets, timed lasers and a hidden maze."], ["TWO PEARLS AND THE BOSS", "From Level 8, guide both pearls to the exit. On Level 10, tap the moving boss three times to defeat it. Red bonus orbs can also be tapped; gold and blue orbs have special rewards."]]
+const TUTORIAL_PAGES := [["ДОБРО ПОЖАЛОВАТЬ В MIKROZZ", "Проведите шарик через лабиринт, плавно наклоняя телефон. В этой тренировочной комнате вы освоите управление."], ["КАЛИБРОВКА ТЕЛЕФОНА", "Положите телефон ровно и неподвижно, затем нажмите «КАЛИБРОВАТЬ». Индикатор сверху показывает, работает ли управление наклоном."], ["ДВИЖЕНИЕ И УПРАВЛЕНИЕ", "Медленно наклоняйте телефон в сторону движения шарика. Достаточно небольших движений — не трясите устройство. Стрелки в нижней панели позволяют управлять касаниями."], ["ИСПОЛЬЗУЙТЕ ПАЛЬЦЫ", "Удерживайте кнопки ворот в нижней панели, одновременно управляя шариком. На поздних уровнях нужно зажимать несколько кнопок сразу — используйте несколько пальцев."], ["ГОЛОВОЛОМКИ И ОСОБЫЕ ОБЪЕКТЫ", "Светящиеся плиты дают бонусы, порталы переносят между проходами, а лёд, песок, конвейеры и пружины меняют движение шарика. На поздних уровнях появятся движущиеся преграды, магниты, лазеры с таймером и скрытый лабиринт."], ["ДВА ШАРИКА И БОСС", "Начиная с 8-го уровня, доведите до выхода оба шарика. На 10-м уровне трижды нажмите на движущегося босса, чтобы победить его. Красные бонусные шарики тоже можно лопать; золотые и синие дают особые награды."]]
 
 var root: Control
 var hud_label: Label
@@ -55,10 +55,10 @@ func setup(size: Vector2) -> void:
 	sensor_label.size = Vector2(190, 24)
 	sensor_label.add_theme_font_size_override("font_size", 11)
 	sensor_label.add_theme_color_override("font_color", Color("#6c8075"))
-	sensor_label.text = "TILT SENSOR: CHECKING..."
+	sensor_label.text = "ДАТЧИК НАКЛОНА: ПРОВЕРКА..."
 	root.add_child(sensor_label)
 	var calibrate := Button.new()
-	calibrate.text = "CALIBRATE"
+	calibrate.text = "КАЛИБРОВАТЬ"
 	calibrate.position = Vector2(size.x - 112, 80)
 	calibrate.size = Vector2(94, 32)
 	calibrate.focus_mode = Control.FOCUS_NONE
@@ -88,7 +88,7 @@ func _build_direction_pad() -> void:
 	dock.add_theme_stylebox_override("panel", dock_style)
 	root.add_child(dock)
 	var title := Label.new()
-	title.text = "TOUCH CONTROLS"
+	title.text = "СЕНСОРНОЕ УПРАВЛЕНИЕ"
 	title.position = Vector2(18, viewport_size.y - 137)
 	title.add_theme_font_size_override("font_size", 9)
 	title.add_theme_color_override("font_color", Color("#82968a"))
@@ -172,7 +172,7 @@ func _update_tutorial_page() -> void:
 	var box := tutorial_panel.get_child(0)
 	box.get_node("TutorialHeading").text = TUTORIAL_PAGES[tutorial_page][0]
 	box.get_node("TutorialBody").text = TUTORIAL_PAGES[tutorial_page][1]
-	box.get_node("TutorialNext").text = "NEXT" if tutorial_page < TUTORIAL_PAGES.size() - 1 else "START PRACTICE"
+	box.get_node("TutorialNext").text = "ДАЛЕЕ" if tutorial_page < TUTORIAL_PAGES.size() - 1 else "НАЧАТЬ ТРЕНИРОВКУ"
 
 func _advance_tutorial() -> void:
 	if tutorial_page < TUTORIAL_PAGES.size() - 1:
@@ -219,27 +219,27 @@ func open_settings(music: float, sfx: float, sensitivity: float, vibration: bool
 	box.add_theme_constant_override("margin_bottom", 16)
 	settings_panel.add_child(box)
 	var heading := Label.new()
-	heading.text = "GAME SETTINGS"
+	heading.text = "НАСТРОЙКИ ИГРЫ"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 23)
 	heading.add_theme_color_override("font_color", Color("#587565"))
 	box.add_child(heading)
-	_add_slider(box, "MUSIC VOLUME", music, "music")
-	_add_slider(box, "SOUND EFFECTS", sfx, "sfx")
-	_add_slider(box, "TILT SENSITIVITY", sensitivity, "sensitivity", 0.5, 3.0)
+	_add_slider(box, "ГРОМКОСТЬ МУЗЫКИ", music, "music")
+	_add_slider(box, "ГРОМКОСТЬ ЭФФЕКТОВ", sfx, "sfx")
+	_add_slider(box, "ЧУВСТВИТЕЛЬНОСТЬ НАКЛОНА", sensitivity, "sensitivity", 0.5, 3.0)
 	var vibration_toggle := CheckButton.new()
-	vibration_toggle.text = "Vibration on events"
+	vibration_toggle.text = "Вибрация при событиях"
 	vibration_toggle.button_pressed = vibration
 	vibration_toggle.toggled.connect(func(value: bool): settings_changed.emit("vibration", value))
 	box.add_child(vibration_toggle)
 	var hint := Label.new()
-	hint.text = "Progress and settings save automatically."
+	hint.text = "Прогресс и настройки сохраняются автоматически."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color("#87968c"))
 	box.add_child(hint)
 	var close := Button.new()
-	close.text = "CLOSE"
+	close.text = "ЗАКРЫТЬ"
 	close.custom_minimum_size = Vector2(140, 42)
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.pressed.connect(close_settings)
@@ -273,14 +273,14 @@ func close_settings() -> void:
 
 func set_sensor_status(available: bool, magnitude: float) -> void:
 	if available:
-		sensor_label.text = "TILT SENSOR: ACTIVE  %.1f" % magnitude
+		sensor_label.text = "ДАТЧИК НАКЛОНА: АКТИВЕН  %.1f" % magnitude
 		sensor_label.add_theme_color_override("font_color", Color("#477d5c"))
 	else:
-		sensor_label.text = "TILT SENSOR: UNAVAILABLE"
+		sensor_label.text = "ДАТЧИК НАКЛОНА: НЕДОСТУПЕН"
 		sensor_label.add_theme_color_override("font_color", Color("#b06d65"))
 
 func set_hud(level: int, lives: int, score: int, total: int) -> void:
-	hud_label.text = "LEVEL %02d     ♥ %d     COINS %d/%d" % [level, lives, score, total]
+	hud_label.text = "УРОВЕНЬ %02d     ♥ %d     ЖЕМЧУЖИНЫ %d/%d" % [level, lives, score, total]
 
 func set_message(value: String) -> void:
 	message_label.text = value
@@ -349,7 +349,7 @@ func show_result(title: String, detail: String, allow_next: bool) -> void:
 	body.add_theme_color_override("font_color", Color("#718579"))
 	box.add_child(body)
 	var action := Button.new()
-	action.text = "NEXT LEVEL" if allow_next else "TRY AGAIN"
+	action.text = "ДАЛЕЕ LEVEL" if allow_next else "ПОПРОБОВАТЬ СНОВА"
 	action.custom_minimum_size = Vector2(180, 48)
 	action.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	action.pressed.connect(_on_result_action.bind(allow_next))
