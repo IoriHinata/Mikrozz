@@ -14,6 +14,8 @@ var active_level := 1
 var generation_seed := 0
 var theme_id := -1
 var theme_stage := 1
+var endless_cycle := 0
+var sequence_length := 3
 var endless_mode := false
 var cell_size_x := 42.0
 var cell_size_y := 42.0
@@ -82,6 +84,8 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	shape_id = 0 if level_number <= 0 else posmod(level_number - 1, 4)
 	theme_id = posmod(int((level_number - 11) / 4), 13) if endless_mode else -1
 	theme_stage = posmod(level_number - 11, 4) + 1 if endless_mode else 1
+	endless_cycle = int((level_number - 11) / 52) if endless_mode else 0
+	sequence_length = clampi(2 + theme_stage + endless_cycle, 3, 10) if endless_mode and theme_id == 12 else 3
 	_build_cells()
 	_initialize_coverage()
 	_add_maze_loops()
@@ -787,7 +791,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 		if route_cell != start_cell and route_cell != target_cell and route_cell not in route_cells_used and not _cell_is_occupied(route_cell):
 			route_indices.append(i)
 			route_cells_used.append(route_cell)
-	var count := theme_stage
+	var count := mini(12, theme_stage + endless_cycle)
 	match theme_id:
 		0:
 			var placed := 0
@@ -813,7 +817,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				add_child(surface)
 				special_mechanic_count += 1
 		4:
-			for pair_index in range(mini(theme_stage, int(candidates.size() / 2))):
+			for pair_index in range(mini(count, int(candidates.size() / 2))):
 				var portal_a := PortalPad.new()
 				var portal_b := PortalPad.new()
 				portal_a.position = _cell_center(candidates[pair_index * 2])
@@ -828,6 +832,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var conveyor := ConveyorZone.new()
 				conveyor.position = _cell_center(solution[route_indices[i]])
 				conveyor.direction = Vector2.RIGHT if (i + theme_stage) % 2 == 0 else Vector2.LEFT
+				conveyor.force_strength = 185.0 + float(endless_cycle + theme_stage) * 18.0
 				add_child(conveyor)
 				special_mechanic_count += 1
 		6:
@@ -835,6 +840,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var spring := SpringPad.new()
 				spring.position = _cell_center(solution[route_indices[i]])
 				spring.kick_direction = [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT][posmod(i + theme_stage, 4)]
+				spring.impulse_strength = 220.0 + float(endless_cycle + theme_stage) * 18.0
 				add_child(spring)
 				special_mechanic_count += 1
 		7:
@@ -849,7 +855,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var barrier := MovingBarrier.new()
 				barrier.position = _cell_center(barrier_cell)
 				barrier.travel = cell_size * 0.18
-				barrier.speed = 1.0 + float(theme_stage) * 0.22
+				barrier.speed = 1.0 + float(theme_stage + endless_cycle) * 0.22
 				barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
 				add_child(barrier)
 				special_mechanic_count += 1
@@ -858,7 +864,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var magnet := MagnetField.new()
 				magnet.position = _cell_center(solution[route_indices[i]])
 				magnet.radius = cell_size * (1.0 + float(theme_stage) * 0.12)
-				magnet.strength = 75.0 + float(theme_stage) * 18.0
+				magnet.strength = 75.0 + float(theme_stage + endless_cycle) * 18.0
 				add_child(magnet)
 				special_mechanic_count += 1
 		9:
@@ -866,7 +872,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				var bridge := RotatingBridge.new()
 				bridge.position = _cell_center(solution[route_indices[i]])
 				bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
-				bridge.rotation_speed = 0.65 + float(theme_stage) * 0.12
+				bridge.rotation_speed = 0.65 + float(theme_stage + endless_cycle) * 0.12
 				add_child(bridge)
 				special_mechanic_count += 1
 		10:
@@ -879,6 +885,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 					var laser := LaserHazard.new()
 					laser.position = _cell_center(cell)
 					add_child(laser)
+					laser.pulse_timer.wait_time = maxf(0.65, 1.35 - float(theme_stage + endless_cycle) * 0.08)
 					hazard_created.emit(laser)
 					placed_lasers += 1
 					special_mechanic_count += 1
@@ -887,7 +894,7 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 		11:
 			special_mechanic_count = 1
 		12:
-			for i in range(mini(3, route_indices.size())):
+			for i in range(mini(sequence_length, route_indices.size())):
 				var plate := SequencePlate.new()
 				plate.plate_index = i
 				plate.position = _cell_center(solution[route_indices[i]])
@@ -968,7 +975,7 @@ func remove_collected_coins(positions: Array) -> void:
 func activate_sequence_plate(index: int) -> void:
 	if index == sequence_next:
 		sequence_next += 1
-		if sequence_next >= 3:
+		if sequence_next >= sequence_length:
 			level_mechanic_event.emit("Последовательность разгадана! +12", 12)
 			sequence_next = 0
 			for child in get_children():
@@ -976,7 +983,7 @@ func activate_sequence_plate(index: int) -> void:
 					child.triggered = false
 					child.queue_redraw()
 		else:
-			level_mechanic_event.emit("Верная плита: %d/3" % sequence_next, 0)
+			level_mechanic_event.emit("Верная плита: %d/%d" % [sequence_next, sequence_length], 0)
 	else:
 		sequence_next = 0
 		for child in get_children():
@@ -1104,6 +1111,7 @@ class PortalPad:
 class ConveyorZone:
 	extends Area2D
 	var direction := Vector2.RIGHT
+	var force_strength := 185.0
 	var active_body: RigidBody2D
 	func _ready() -> void:
 		add_to_group("special_occupied")
@@ -1125,7 +1133,7 @@ class ConveyorZone:
 			active_body = null
 	func _physics_process(_delta: float) -> void:
 		if is_instance_valid(active_body):
-			active_body.apply_central_force(direction * 185.0)
+			active_body.apply_central_force(direction * force_strength)
 	func _draw() -> void:
 		draw_rect(Rect2(-15, -11, 30, 22), Color("#e7c77f"), true)
 		for x in [-8.0, 0.0, 8.0]:
@@ -1134,6 +1142,7 @@ class ConveyorZone:
 class SpringPad:
 	extends Area2D
 	var kick_direction := Vector2.UP
+	var impulse_strength := 220.0
 	func _ready() -> void:
 		add_to_group("special_occupied")
 		collision_layer = 0
@@ -1147,7 +1156,7 @@ class SpringPad:
 		queue_redraw()
 	func _on_enter(body: Node) -> void:
 		if body is RigidBody2D and body.is_in_group("player"):
-			(body as RigidBody2D).apply_central_impulse(kick_direction.normalized() * 220.0)
+			(body as RigidBody2D).apply_central_impulse(kick_direction.normalized() * impulse_strength)
 	func _draw() -> void:
 		draw_circle(Vector2.ZERO, 12.0, Color("#edb17c"))
 		draw_line(Vector2(-7, 3), Vector2(0, -5), Color.WHITE, 3.0)
