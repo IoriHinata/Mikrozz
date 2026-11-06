@@ -1196,7 +1196,8 @@ class MovingBarrier:
 		elapsed += delta
 		position = initial_position + Vector2(0, sin(elapsed * speed) * travel)
 	func _draw() -> void:
-		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#b87985"), true, true, 2.0)
+		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#b87985"), true)
+		draw_rect(Rect2(-barrier_size * 0.5, barrier_size), Color("#865461"), false, 2.0, true)
 
 class RotatingBridge:
 	extends AnimatableBody2D
@@ -1218,7 +1219,8 @@ class RotatingBridge:
 		elapsed += delta
 		rotation = initial_rotation + (sin(elapsed * rotation_speed) * 0.5 + 0.5) * PI * 0.5
 	func _draw() -> void:
-		draw_rect(Rect2(-bridge_size * 0.5, bridge_size), Color("#9b91d3"), true, true, 2.0)
+		draw_rect(Rect2(-bridge_size * 0.5, bridge_size), Color("#9b91d3"), true)
+		draw_rect(Rect2(-bridge_size * 0.5, bridge_size), Color("#6d659e"), false, 2.0, true)
 
 class MagnetField:
 	extends Node2D
