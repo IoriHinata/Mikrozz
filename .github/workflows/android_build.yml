@@ -205,10 +205,11 @@ jobs:
               var snapshot_restored = false
               for snapshot_child in generator.get_children():
                 if snapshot_child is Node2D and snapshot_child.has_meta("level_save_key"):
-                  var original_position = snapshot_child.position
-                  snapshot_child.position += Vector2(7.0, 9.0)
+                  var snapshot_node = snapshot_child as Node2D
+                  var original_position: Vector2 = snapshot_node.position
+                  snapshot_node.position += Vector2(7.0, 9.0)
                   generator.apply_level_snapshot(object_snapshot)
-                  assert(snapshot_child.position.distance_to(original_position) < 0.1, "Mechanic snapshot restore failed at level %d" % level)
+                  assert(snapshot_node.position.distance_to(original_position) < 0.1, "Mechanic snapshot restore failed at level %d" % level)
                   snapshot_restored = true
                   break
               assert(snapshot_restored, "No stateful maze objects available for snapshot test at level %d" % level)
