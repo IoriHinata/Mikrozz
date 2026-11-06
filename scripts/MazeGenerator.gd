@@ -715,10 +715,12 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				candidates.append(cell)
 	candidates.shuffle()
 	var route_indices: Array[int] = []
+	var route_cells_used: Array[Vector2i] = []
 	for i in range(2, solution.size() - 2):
 		var route_cell: Vector2i = solution[i]
-		if route_cell != start_cell and route_cell != target_cell and not _cell_is_occupied(route_cell) and (route_indices.is_empty() or route_cell != solution[route_indices.back()]):
+		if route_cell != start_cell and route_cell != target_cell and route_cell not in route_cells_used and not _cell_is_occupied(route_cell):
 			route_indices.append(i)
+			route_cells_used.append(route_cell)
 	var count := theme_stage
 	match theme_id:
 		0:
