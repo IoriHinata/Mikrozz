@@ -87,6 +87,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	for _i in range(gate_bodies.size()):
 		gate_button_states.append(false)
 	_build_objects(level_number)
+	_assign_save_keys()
 	queue_redraw()
 
 func _process(_delta: float) -> void:
@@ -245,6 +246,12 @@ func _ensure_three_open_sides(cell: Vector2i) -> void:
 		if cells[neighbor.y][neighbor.x]["inside"] and cells[cell.y][cell.x]["walls"][d]:
 			cells[cell.y][cell.x]["walls"][d] = false
 			cells[neighbor.y][neighbor.x]["walls"][(d + 2) % 4] = false
+			var edge_position := _cell_edge_center(cell, d)
+			for wall in get_children():
+				if wall is StaticBody2D and not wall.is_in_group("gates") and (wall as Node2D).position.distance_to(edge_position) < 0.1:
+					wall.queue_free()
+					wall_count = maxi(0, wall_count - 1)
+					break
 
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
@@ -291,7 +298,7 @@ func _build_objects(level_number: int) -> void:
 	for y in range(rows):
 		for x in range(cols):
 			var cell := Vector2i(x, y)
-			if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+			if cells[y][x]["inside"] and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 				candidates.append(cell)
 	candidates.shuffle()
 	for i in range(mini(hazard_count, candidates.size())):
@@ -727,18 +734,29 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				add_child(plate)
 				special_mechanic_count += 1
 
-func get_level_snapshot() -> Array:
-	var snapshot: Array = []
-	for i in range(get_child_count()):
-		var child := get_child(i)
+func _assign_save_keys() -> void:
+	var counters: Dictionary = {}
+	for child in get_children():
 		if not child is Node2D:
 			continue
-		var entry: Dictionary = {"index": i, "position": (child as Node2D).position, "rotation": (child as Node2D).rotation, "visible": (child as Node2D).visible}
+		var node := child as Node2D
+		var base_key := "%s|%.1f|%.1f" % [node.get_class(), node.position.x, node.position.y]
+		var ordinal := int(counters.get(base_key, 0))
+		counters[base_key] = ordinal + 1
+		node.set_meta("level_save_key", "%s|%d" % [base_key, ordinal])
+
+func get_level_snapshot() -> Array:
+	var snapshot: Array = []
+	for child in get_children():
+		if not child is Node2D or not child.has_meta("level_save_key"):
+			continue
+		var node := child as Node2D
+		var entry: Dictionary = {"key": String(child.get_meta("level_save_key")), "position": node.position, "rotation": node.rotation, "visible": node.visible}
 		if child is RigidBody2D:
 			entry["velocity"] = (child as RigidBody2D).linear_velocity
 		if child is Area2D:
 			entry["monitoring"] = (child as Area2D).monitoring
-		for property_name in ["triggered", "defeated", "hits", "health", "sequence_next"]:
+		for property_name in ["triggered", "defeated", "hits", "health"]:
 			for property_info in child.get_property_list():
 				if String(property_info.name) == property_name:
 					entry[property_name] = child.get(property_name)
@@ -748,20 +766,25 @@ func get_level_snapshot() -> Array:
 
 func apply_level_snapshot(snapshot: Array) -> void:
 	for entry in snapshot:
-		var index := int(entry.get("index", -1))
-		if index < 0 or index >= get_child_count():
+		var wanted_key := String(entry.get("key", ""))
+		if wanted_key.is_empty():
 			continue
-		var child := get_child(index)
-		if not child is Node2D:
+		var child: Node = null
+		for candidate in get_children():
+			if candidate.has_meta("level_save_key") and String(candidate.get_meta("level_save_key")) == wanted_key:
+				child = candidate
+				break
+		if child == null or not child is Node2D:
 			continue
-		(child as Node2D).position = entry.get("position", (child as Node2D).position)
-		(child as Node2D).rotation = float(entry.get("rotation", (child as Node2D).rotation))
-		(child as Node2D).visible = bool(entry.get("visible", (child as Node2D).visible))
+		var node := child as Node2D
+		node.position = entry.get("position", node.position)
+		node.rotation = float(entry.get("rotation", node.rotation))
+		node.visible = bool(entry.get("visible", node.visible))
 		if child is RigidBody2D and entry.has("velocity"):
 			(child as RigidBody2D).linear_velocity = entry["velocity"]
 		if child is Area2D and entry.has("monitoring"):
 			(child as Area2D).set_deferred("monitoring", bool(entry["monitoring"]))
-		for property_name in ["triggered", "defeated", "hits", "health", "sequence_next"]:
+		for property_name in ["triggered", "defeated", "hits", "health"]:
 			if entry.has(property_name):
 				for property_info in child.get_property_list():
 					if String(property_info.name) == property_name:
