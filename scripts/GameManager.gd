@@ -40,6 +40,7 @@ var saved_ball_velocities: Array[Vector2] = []
 var saved_boss_defeated := false
 var saved_sequence_next := 0
 var saved_safe_passage_time := 0.0
+var saved_exit_count := 0
 var camera: Camera2D
 var camera_zoom := 1.0
 var camera_pan_offset := Vector2.ZERO
@@ -142,6 +143,7 @@ func _load_progress() -> void:
 		saved_boss_defeated = bool(cfg.get_value("state", "boss_defeated", false))
 		saved_sequence_next = int(cfg.get_value("state", "sequence_next", 0))
 		saved_safe_passage_time = maxf(0.0, float(cfg.get_value("state", "safe_passage_time", 0.0)))
+		saved_exit_count = clampi(int(cfg.get_value("state", "exit_count", 0)), 0, 1)
 		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
 		camera_pan_offset = cfg.get_value("state", "camera_pan", Vector2.ZERO)
 	if not tutorial_completed:
@@ -178,6 +180,7 @@ func _save_progress(saved_level: int = -1) -> void:
 		cfg.set_value("state", "boss_defeated", boss_is_defeated)
 		cfg.set_value("state", "sequence_next", maze.sequence_next)
 		cfg.set_value("state", "safe_passage_time", safe_passage_timer.time_left if is_instance_valid(safe_passage_timer) else 0.0)
+		cfg.set_value("state", "exit_count", exit_balls_entered.size())
 		cfg.set_value("state", "camera_zoom", camera_zoom)
 		cfg.set_value("state", "camera_pan", camera_pan_offset)
 	else:
@@ -235,6 +238,9 @@ func _build_level() -> void:
 					maze_child.queue_free()
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
+	if restoring_level and exit_required > 1 and saved_exit_count > 0:
+		for i in range(mini(saved_exit_count, exit_required - 1)):
+			exit_balls_entered[-(i + 1)] = true
 	boss_required = level >= 10
 	boss_is_defeated = saved_boss_defeated if restoring_level else false
 	if not restoring_level:
