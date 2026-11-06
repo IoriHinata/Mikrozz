@@ -236,6 +236,14 @@ func _safe_neighbor_count(cell: Vector2i) -> int:
 			count += 1
 	return count
 
+func _hazard_too_close(cell: Vector2i) -> bool:
+	var center := _cell_center(cell)
+	for child in get_children():
+		if child is Node2D and child.is_in_group("hazard"):
+			if (child as Node2D).position.distance_to(center) < cell_size * 1.2:
+				return true
+	return false
+
 func _ensure_three_open_sides(cell: Vector2i) -> void:
 	var dirs := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
 	for d in range(4):
@@ -314,6 +322,8 @@ func _build_objects(level_number: int) -> void:
 	for candidate in candidates:
 		if placed_hazards >= hazard_count:
 			break
+		if _hazard_too_close(candidate):
+			continue
 		_ensure_three_open_sides(candidate)
 		if _safe_neighbor_count(candidate) < 3:
 			continue
@@ -714,6 +724,8 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 		0:
 			var placed := 0
 			for cell in candidates:
+				if _hazard_too_close(cell):
+					continue
 				_ensure_three_open_sides(cell)
 				if _safe_neighbor_count(cell) >= 3:
 					var hazard := _make_hazard(_cell_center(cell), cell_size * 0.20, true)
@@ -792,6 +804,8 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 		10:
 			var placed_lasers := 0
 			for cell in candidates:
+				if _hazard_too_close(cell):
+					continue
 				_ensure_three_open_sides(cell)
 				if _safe_neighbor_count(cell) >= 3:
 					var laser := LaserHazard.new()
