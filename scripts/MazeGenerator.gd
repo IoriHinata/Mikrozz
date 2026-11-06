@@ -699,10 +699,16 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				add_child(spring)
 				special_mechanic_count += 1
 		7:
-			for i in range(mini(count, route_indices.size())):
-				_ensure_three_open_sides(solution[route_indices[i]])
+			var safe_barrier_indices: Array[int] = []
+			for route_index in route_indices:
+				var barrier_cell: Vector2i = solution[route_index]
+				_ensure_three_open_sides(barrier_cell)
+				if _safe_neighbor_count(barrier_cell) >= 3:
+					safe_barrier_indices.append(route_index)
+			for i in range(mini(count, safe_barrier_indices.size())):
+				var barrier_cell: Vector2i = solution[safe_barrier_indices[i]]
 				var barrier := MovingBarrier.new()
-				barrier.position = _cell_center(solution[route_indices[i]])
+				barrier.position = _cell_center(barrier_cell)
 				barrier.travel = cell_size * 0.18
 				barrier.speed = 1.0 + float(theme_stage) * 0.22
 				barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
