@@ -22,6 +22,9 @@ var audio
 var level_locked := false
 var viewport_size := Vector2.ZERO
 var start_point := Vector2.ZERO
+var extra_balls: Array[RigidBody2D] = []
+var exit_balls_entered: Dictionary = {}
+var exit_required := 1
 var music_volume := 0.32
 var sfx_volume := 0.75
 var vibration_enabled := true
@@ -123,7 +126,11 @@ func _build_level() -> void:
 	maze.generate(level, viewport_size)
 	maze.pressure_button_activated.connect(_on_pressure_button_activated)
 	maze.pop_ball_popped.connect(_on_pop_ball_popped)
+	maze.level_mechanic_event.connect(_on_level_mechanic_event)
+	maze.boss_defeated.connect(_on_boss_defeated)
 	start_point = maze.start_position
+	exit_required = 2 if level >= 8 else 1
+	exit_balls_entered.clear()
 	coins_total = _count_coins()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
@@ -141,10 +148,21 @@ func _count_coins() -> int:
 func _spawn_ball() -> void:
 	if is_instance_valid(ball):
 		ball.queue_free()
+	for extra in extra_balls:
+		if is_instance_valid(extra):
+			extra.queue_free()
+	extra_balls.clear()
 	ball = BallScript.new()
 	ball.position = start_point
 	ball.set("tilt_controller", tilt)
 	add_child(ball)
+	if level >= 8:
+		var partner: RigidBody2D = BallScript.new()
+		partner.position = start_point + Vector2(maze.cell_size * 0.22, 0.0)
+		partner.set("tilt_controller", tilt)
+		partner.set_meta("echo_ball", true)
+		add_child(partner)
+		extra_balls.append(partner)
 
 func _connect_hazard(area: Area2D) -> void:
 	area.body_entered.connect(_on_hazard_body)
@@ -176,6 +194,10 @@ func _on_hazard_body(body: Node) -> void:
 func _on_exit_body(body: Node) -> void:
 	if not body.is_in_group("player") or level_locked:
 		return
+	exit_balls_entered[body.get_instance_id()] = true
+	if exit_balls_entered.size() < exit_required:
+		ui.set_message("Bring both pearls to the golden exit (%d/%d)" % [exit_balls_entered.size(), exit_required])
+		return
 	if score < coins_total:
 		ui.set_message("Find all %d pearls first (%d/%d)" % [coins_total, score, coins_total])
 		return
@@ -194,6 +216,7 @@ func _lose_life() -> void:
 	if level_locked:
 		return
 	level_locked = true
+	exit_balls_entered.clear()
 	lives -= 1
 	audio.play_hit()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
@@ -218,7 +241,11 @@ func _respawn_all() -> void:
 	maze.generate(level, viewport_size)
 	maze.pressure_button_activated.connect(_on_pressure_button_activated)
 	maze.pop_ball_popped.connect(_on_pop_ball_popped)
+	maze.level_mechanic_event.connect(_on_level_mechanic_event)
+	maze.boss_defeated.connect(_on_boss_defeated)
 	start_point = maze.start_position
+	exit_required = 2 if level >= 8 else 1
+	exit_balls_entered.clear()
 	coins_total = _count_coins()
 	score = 0
 	_save_progress()
@@ -235,24 +262,41 @@ func _on_pressure_button_activated(index: int) -> void:
 	for hazard in maze.get_children():
 		if hazard is Area2D and hazard.is_in_group("hazard"):
 			hazard.set_deferred("monitoring", false)
-	get_tree().create_timer(4.0).timeout.connect(_restore_hazards)
+	get_tree().create_timer(4.0).timeout.connect(_restore_hazards.bind(maze))
 	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
 	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
 		Input.vibrate_handheld(45)
 	_save_progress()
 
-func _restore_hazards() -> void:
-	if not is_instance_valid(maze):
+func _restore_hazards(target_maze: Node) -> void:
+	if not is_instance_valid(target_maze) or target_maze != maze:
 		return
-	for hazard in maze.get_children():
+	for hazard in target_maze.get_children():
 		if hazard is Area2D and hazard.is_in_group("hazard"):
 			hazard.set_deferred("monitoring", true)
 
-func _on_pop_ball_popped(_red_ball: RigidBody2D) -> void:
-	total_run_score += 2
+func _on_pop_ball_popped(red_ball: RigidBody2D) -> void:
+	var points := int(red_ball.get("score_value")) if is_instance_valid(red_ball) else 2
+	var orb_type := String(red_ball.get("orb_type")) if is_instance_valid(red_ball) else "normal"
+	total_run_score += points
+	if orb_type == "boost" and is_instance_valid(ball):
+		ball.linear_velocity *= 1.35
 	audio.play_coin()
-	ui.set_message("Red orb popped! +2 bonus points")
+	ui.set_message("Bonus orb popped! +%d points" % points)
+	_save_progress()
+
+func _on_level_mechanic_event(message: String, points: int) -> void:
+	total_run_score += points
+	ui.set_message(message)
+	if points > 0:
+		audio.play_coin()
+		_save_progress()
+
+func _on_boss_defeated() -> void:
+	total_run_score += 20
+	ui.set_message("Boss defeated! +20 bonus points")
+	audio.play_win()
 	_save_progress()
 
 func _on_tutorial_finished() -> void:
