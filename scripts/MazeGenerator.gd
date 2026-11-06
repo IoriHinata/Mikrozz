@@ -209,7 +209,7 @@ func _build_objects(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var candidate := Vector2i(x, y)
-				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell:
+				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
 					plate_cells.append(candidate)
 		plate_cells.shuffle()
 		var plate_count := mini(2, 1 + int(level_number / 6))
@@ -226,11 +226,12 @@ func _build_objects(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var candidate := Vector2i(x, y)
-				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell:
+				if cells[y][x]["inside"] and candidate not in solution and candidate != start_cell and candidate != target_cell and not _cell_is_occupied(candidate):
 					pop_spawn_cells.append(candidate)
 		pop_spawn_cells.shuffle()
 		if not pop_spawn_cells.is_empty():
 			var spawner := PopSpawnerVisual.new()
+			spawner.add_to_group("special_occupied")
 			pop_spawner_position = _cell_center(pop_spawn_cells[0])
 			spawner.position = pop_spawner_position
 			add_child(spawner)
@@ -368,6 +369,14 @@ func _cell_edge_center(cell: Vector2i, direction: int) -> Vector2:
 func _cell_edge_size(direction: int) -> Vector2:
 	return Vector2(cell_size + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size + 5)
 
+func _cell_is_occupied(cell: Vector2i) -> bool:
+	var center := _cell_center(cell)
+	for child in get_children():
+		if child is Node2D and (child.is_in_group("hazard") or child.is_in_group("puzzle_plates") or child.is_in_group("special_occupied")):
+			if (child as Node2D).position.distance_to(center) < cell_size * 0.34:
+				return true
+	return false
+
 func _build_special_mechanics(level_number: int) -> void:
 	sequence_next = 0
 	special_mechanic_count = 0
@@ -384,7 +393,7 @@ func _build_special_mechanics(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 					branches.append(cell)
 		if branches.size() >= 2:
 			branches.shuffle()
@@ -429,7 +438,7 @@ func _build_special_mechanics(level_number: int) -> void:
 		for y in range(rows):
 			for x in range(cols):
 				var cell := Vector2i(x, y)
-				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell:
+				if cells[y][x]["inside"] and cell not in solution and cell != start_cell and cell != target_cell and not _cell_is_occupied(cell):
 					laser_cells.append(cell)
 		if not laser_cells.is_empty():
 			laser_cells.shuffle()
@@ -507,6 +516,7 @@ class PressurePlate:
 	var plate_index := 0
 	var triggered := false
 	func _ready() -> void:
+		add_to_group("puzzle_plates")
 		var shape := CircleShape2D.new()
 		shape.radius = 13.0
 		var collision := CollisionShape2D.new()
@@ -710,6 +720,7 @@ class SequencePlate:
 	var sequence_owner: Node
 	var triggered := false
 	func _ready() -> void:
+		add_to_group("puzzle_plates")
 		collision_layer = 0
 		collision_mask = 1
 		var shape := CircleShape2D.new()
