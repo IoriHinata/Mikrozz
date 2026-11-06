@@ -125,7 +125,10 @@ func _physics_process(_delta: float) -> void:
 		var node := player as Node2D
 		var player_id := node.get_instance_id()
 		var current_position := node.global_position
-		if previous_player_positions.has(player_id):
+		if node.has_meta("maze_teleported"):
+			_mark_visited_world_position(current_position)
+			node.remove_meta("maze_teleported")
+		elif previous_player_positions.has(player_id):
 			var previous_position: Vector2 = previous_player_positions[player_id]
 			var distance := previous_position.distance_to(current_position)
 			if distance <= cell_size * 2.0:
@@ -1104,6 +1107,7 @@ class PortalPad:
 		if not body.is_in_group("player") or body.get_meta("portal_cooldown", false):
 			return
 		body.set_meta("portal_cooldown", true)
+		body.set_meta("maze_teleported", true)
 		body.global_position = destination
 		if body is RigidBody2D:
 			body.linear_velocity = body.linear_velocity.rotated(0.25)
