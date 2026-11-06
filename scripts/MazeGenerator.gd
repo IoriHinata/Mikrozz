@@ -151,8 +151,9 @@ func _mark_visited_world_position(world_position: Vector2) -> void:
 	)
 	if cell.x < 0 or cell.x >= cols or cell.y < 0 or cell.y >= rows:
 		return
-	if cells[cell.y][cell.x]["inside"]:
+	if cells[cell.y][cell.x]["inside"] and not visited_cells.has(cell):
 		visited_cells[cell] = true
+		queue_redraw()
 
 func get_coverage_percent() -> float:
 	if total_inside_cells <= 0:
@@ -171,6 +172,7 @@ func restore_visited_cells(saved_cells: Array) -> void:
 	for saved_cell in saved_cells:
 		if saved_cell is Vector2i and saved_cell.x >= 0 and saved_cell.x < cols and saved_cell.y >= 0 and saved_cell.y < rows and cells[saved_cell.y][saved_cell.x]["inside"]:
 			visited_cells[saved_cell] = true
+	queue_redraw()
 
 func _build_cells() -> void:
 	cells.clear()
@@ -602,6 +604,23 @@ func _draw() -> void:
 					draw_rect(Rect2(origin + Vector2(x * cell_size_x, y * cell_size_y), Vector2(cell_size_x, cell_size_y)), palette.floor, true)
 	else:
 		draw_colored_polygon(_board_polygon(), palette.floor)
+	# Tint explored cells slightly darker so the player can read their progress.
+	# Keep a narrow inset to avoid hiding the visual separation between cells.
+	var explored_color: Color = palette.floor.darkened(0.085)
+	for explored_cell in visited_cells.keys():
+		if not explored_cell is Vector2i:
+			continue
+		var explored := explored_cell as Vector2i
+		if explored.x < 0 or explored.x >= cols or explored.y < 0 or explored.y >= rows:
+			continue
+		var explored_center := _cell_center(explored)
+		if hidden_mode and explored_center.distance_to(reveal_position) > cell_size * 2.35:
+			continue
+		var explored_rect := Rect2(
+			origin + Vector2(explored.x * cell_size_x + 1.5, explored.y * cell_size_y + 1.5),
+			Vector2(maxf(1.0, cell_size_x - 3.0), maxf(1.0, cell_size_y - 3.0))
+		)
+		draw_rect(explored_rect, explored_color, true)
 	var wall_lines := PackedVector2Array()
 	for y in range(rows):
 		for x in range(cols):
