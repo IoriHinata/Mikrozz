@@ -201,6 +201,17 @@ jobs:
               assert(generator.get_visited_cells().size() == inside_count, "Visited-cell save data incomplete at level %d" % level)
               var wall_body = generator.get_node_or_null("BatchedMazeWalls")
               assert(wall_body != null and generator.wall_count > 0, "Batched wall collision missing at level %d" % level)
+              var object_snapshot = generator.get_level_snapshot()
+              var snapshot_restored = false
+              for snapshot_child in generator.get_children():
+                if snapshot_child is Node2D and snapshot_child.has_meta("level_save_key"):
+                  var original_position = snapshot_child.position
+                  snapshot_child.position += Vector2(7.0, 9.0)
+                  generator.apply_level_snapshot(object_snapshot)
+                  assert(snapshot_child.position.distance_to(original_position) < 0.1, "Mechanic snapshot restore failed at level %d" % level)
+                  snapshot_restored = true
+                  break
+              assert(snapshot_restored, "No stateful maze objects available for snapshot test at level %d" % level)
               assert(is_equal_approx(generator.cell_size_x * generator.cell_size_y, 3600.0), "Logical cell area changed at level %d" % level)
               assert(generator.gate_bodies.size() <= 3, "Too many gates at level %d" % level)
               for i in range(generator.solution.size() - 1):
