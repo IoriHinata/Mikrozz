@@ -346,7 +346,7 @@ func _on_hazard_body(body: Node) -> void:
 func _on_exit_body(body: Node) -> void:
 	if not body.is_in_group("player") or level_locked:
 		return
-	var coverage := maze.get_coverage_percent() if is_instance_valid(maze) else 0.0
+	var coverage: float = maze.get_coverage_percent() if is_instance_valid(maze) else 0.0
 	if coverage < 99.9:
 		ui.set_message("Исследуйте весь лабиринт: %d%%" % int(round(coverage)))
 		return
