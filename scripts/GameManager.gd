@@ -274,7 +274,7 @@ func _build_level() -> void:
 func _level_intro_message() -> String:
 	if level >= 11 and is_instance_valid(maze):
 		var themes := ["ШИПЫ", "ЛЁД", "ПЕСОК", "ЛИПКАЯ ПОВЕРХНОСТЬ", "ПОРТАЛЫ", "КОНВЕЙЕРЫ", "ПРУЖИНЫ", "ДВИЖУЩИЕСЯ СТЕНЫ", "МАГНИТЫ", "ВРАЩАЮЩИЕСЯ МОСТЫ", "ЛАЗЕРЫ", "СКРЫТЫЙ ЛАБИРИНТ", "ПОСЛЕДОВАТЕЛЬНОСТИ"]
-		return "БЕСКОНЕЧНЫЙ РЕЖИМ • %s • ЭТАП %d/4 • %d×%d" % [themes[maze.theme_id], maze.theme_stage, maze.cols, maze.rows]
+		return "БЕСКОНЕЧНЫЙ РЕЖИМ • %s • ЦИКЛ %d • ЭТАП %d/4 • %d×%d" % [themes[maze.theme_id], maze.endless_cycle + 1, maze.theme_stage, maze.cols, maze.rows]
 	match level:
 		0: return "ТРЕНИРОВКА • Наклоняйте телефон, собирайте жемчужины и найдите выход"
 		1: return "ЛЁД • Шарик скользит дальше по инерции"
