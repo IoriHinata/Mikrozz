@@ -510,7 +510,6 @@ func _build_wall_collision() -> void:
 	var body := StaticBody2D.new()
 	body.name = "BatchedMazeWalls"
 	var shape := ConcavePolygonShape2D.new()
-	shape.backface_collision = true
 	shape.segments = segments
 	var collision := CollisionShape2D.new()
 	collision.shape = shape
