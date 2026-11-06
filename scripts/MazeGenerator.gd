@@ -65,8 +65,8 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	cols = 9 if level_number < 5 else 11
 	rows = 11 if level_number < 5 else 13
 	if endless_mode:
-		cols = mini(128, 9 + int(float(growth) * 0.46))
-		rows = mini(128, 11 + int(float(growth) * 0.46))
+		cols = mini(192, 9 + int(float(growth) * 0.70))
+		rows = mini(192, 11 + int(float(growth) * 0.70))
 	cell_size = 42.0
 	var aspect_values: Array[float] = [1.0, 1.25, 0.8, 1.5, 0.667]
 	var aspect := aspect_values[posmod(maxi(0, level_number), aspect_values.size())]
@@ -87,6 +87,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	for _i in range(gate_bodies.size()):
 		gate_button_states.append(false)
 	_build_objects(level_number)
+	_build_wall_collision()
 	_assign_save_keys()
 	queue_redraw()
 
@@ -246,12 +247,7 @@ func _ensure_three_open_sides(cell: Vector2i) -> void:
 		if cells[neighbor.y][neighbor.x]["inside"] and cells[cell.y][cell.x]["walls"][d]:
 			cells[cell.y][cell.x]["walls"][d] = false
 			cells[neighbor.y][neighbor.x]["walls"][(d + 2) % 4] = false
-			var edge_position := _cell_edge_center(cell, d)
-			for wall in get_children():
-				if wall is StaticBody2D and not wall.is_in_group("gates") and (wall as Node2D).position.distance_to(edge_position) < 0.1:
-					wall.queue_free()
-					wall_count = maxi(0, wall_count - 1)
-					break
+
 
 func _build_geometry(level_number: int) -> void:
 	var gate_edges: Dictionary = {}
@@ -401,16 +397,44 @@ func _make_hazard(at: Vector2, radius: float, spikes: bool) -> Area2D:
 	area.add_child(visual)
 	return area
 
-func _add_wall(at: Vector2, size: Vector2) -> void:
+func _add_wall(_at: Vector2, _size: Vector2) -> void:
+	# Wall colliders are batched into one concave static body after all trap bypasses are finalized.
+	pass
+
+func _build_wall_collision() -> void:
+	var segments := PackedVector2Array()
+	wall_count = 0
+	for y in range(rows):
+		for x in range(cols):
+			if not cells[y][x]["inside"]:
+				continue
+			var cell := Vector2i(x, y)
+			for d in range(4):
+				var neighbor: Vector2i = cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
+				var outside: bool = neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
+				if not outside and not ((d == 1 or d == 2) and cells[y][x]["walls"][d]):
+					continue
+				if not outside and d != 1 and d != 2:
+					continue
+				var wall_center := _cell_edge_center(cell, d)
+				var wall_size := _cell_edge_size(d)
+				var half := wall_size * 0.5
+				var p1 := wall_center + Vector2(-half.x, -half.y)
+				var p2 := wall_center + Vector2(half.x, -half.y)
+				var p3 := wall_center + Vector2(half.x, half.y)
+				var p4 := wall_center + Vector2(-half.x, half.y)
+				segments.append_array(PackedVector2Array([p1, p2, p2, p3, p3, p4, p4, p1]))
+				wall_count += 1
+	if segments.is_empty():
+		return
 	var body := StaticBody2D.new()
-	body.position = at
-	var shape := RectangleShape2D.new()
-	shape.size = size
+	body.name = "BatchedMazeWalls"
+	var shape := ConcavePolygonShape2D.new()
+	shape.segments = segments
 	var collision := CollisionShape2D.new()
 	collision.shape = shape
 	body.add_child(collision)
 	add_child(body)
-	wall_count += 1
 
 func _add_gate(at: Vector2, vertical: bool) -> void:
 	var body := StaticBody2D.new()
@@ -463,19 +487,46 @@ func _edge_key(a: Vector2i, b: Vector2i) -> String:
 	var second := b if first == a else a
 	return "%d,%d|%d,%d" % [first.x, first.y, second.x, second.y]
 
+func _board_polygon() -> PackedVector2Array:
+	var size := board_rect.size
+	var center := board_rect.position + size * 0.5
+	var polygon := PackedVector2Array()
+	match shape_id:
+		0:
+			polygon = PackedVector2Array([board_rect.position, board_rect.position + Vector2(size.x, 0), board_rect.position + size, board_rect.position + Vector2(0, size.y)])
+		1:
+			for i in range(48):
+				var angle := TAU * float(i) / 48.0
+				polygon.append(center + Vector2(cos(angle) * size.x * 0.48, sin(angle) * size.y * 0.48))
+		2:
+			polygon = PackedVector2Array([center + Vector2(0, -size.y * 0.51), center + Vector2(size.x * 0.51, 0), center + Vector2(0, size.y * 0.51), center + Vector2(-size.x * 0.51, 0)])
+		3:
+			for i in range(6):
+				var angle := TAU * float(i) / 6.0
+				polygon.append(center + Vector2(cos(angle) * size.x * 0.5, sin(angle) * size.y * 0.5))
+	return polygon
+
 func _draw() -> void:
-	# Seamless floor fill without visible tile borders or grid lines.
+	var hidden_mode := (endless_mode and theme_id == 11) or (not endless_mode and active_level == 9)
+	if hidden_mode:
+		for y in range(rows):
+			for x in range(cols):
+				if not cells[y][x]["inside"]:
+					continue
+				var center := _cell_center(Vector2i(x, y))
+				if center.distance_to(reveal_position) <= cell_size * 2.35:
+					draw_rect(Rect2(origin + Vector2(x * cell_size_x, y * cell_size_y), Vector2(cell_size_x, cell_size_y)), palette.floor, true)
+	else:
+		draw_colored_polygon(_board_polygon(), palette.floor)
+	var wall_lines := PackedVector2Array()
 	for y in range(rows):
 		for x in range(cols):
 			if not cells[y][x]["inside"]:
 				continue
 			var cell := Vector2i(x, y)
-			var cell_position := _cell_center(cell)
-			var hidden_mode := (endless_mode and theme_id == 11) or (not endless_mode and active_level == 9)
-			if hidden_mode and cell_position.distance_to(reveal_position) > cell_size * 2.35:
+			var center := _cell_center(cell)
+			if hidden_mode and center.distance_to(reveal_position) > cell_size * 2.35:
 				continue
-			var floor_rect := Rect2(origin + Vector2(x * cell_size_x, y * cell_size_y), Vector2(cell_size_x, cell_size_y))
-			draw_rect(floor_rect, palette.floor, true)
 			for d in range(4):
 				var neighbor: Vector2i = cell + [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT][d]
 				var outside: bool = neighbor.x < 0 or neighbor.x >= cols or neighbor.y < 0 or neighbor.y >= rows or not cells[neighbor.y][neighbor.x]["inside"]
@@ -483,10 +534,11 @@ func _draw() -> void:
 					var edge_center := _cell_edge_center(cell, d)
 					var horizontal := d == 0 or d == 2
 					var half := cell_size_x * 0.5 if horizontal else cell_size_y * 0.5
-					var from := edge_center + (Vector2(-half, 0) if horizontal else Vector2(0, -half))
-					var to := edge_center + (Vector2(half, 0) if horizontal else Vector2(0, half))
-					draw_line(from, to, palette.wall.darkened(0.12), 9.0, true)
-					draw_line(from, to, palette.wall.lightened(0.10), 5.0, true)
+					wall_lines.append(edge_center + (Vector2(-half, 0) if horizontal else Vector2(0, -half)))
+					wall_lines.append(edge_center + (Vector2(half, 0) if horizontal else Vector2(0, half)))
+	if not wall_lines.is_empty():
+		draw_multiline(wall_lines, palette.wall.darkened(0.12), 9.0, true)
+		draw_multiline(wall_lines, palette.wall.lightened(0.10), 5.0, true)
 	draw_circle(start_position, cell_size * 0.19, Color("#b5ddc5"))
 	draw_circle(start_position, cell_size * 0.11, Color("#f8fff8"))
 	draw_circle(finish_position, cell_size * 0.28, Color("#f2d58a"))
