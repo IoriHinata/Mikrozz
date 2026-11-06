@@ -23,6 +23,17 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if tilt_controller != null:
 		apply_central_force(tilt_controller.get_force())
+	var surface_mode := String(get_meta("surface_mode", "normal"))
+	match surface_mode:
+		"ice":
+			linear_damp = 0.35
+		"sand":
+			linear_damp = 7.5
+		"sticky":
+			linear_damp = 10.0
+			linear_velocity *= 0.985
+		_:
+			linear_damp = 2.8
 	if linear_velocity.length() > 430.0:
 		linear_velocity = linear_velocity.normalized() * 430.0
 
