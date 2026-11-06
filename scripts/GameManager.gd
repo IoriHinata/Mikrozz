@@ -484,7 +484,7 @@ func _on_gate_pressed(index: int, pressed: bool) -> void:
 		maze.set_gate_button_state(index, pressed)
 
 func _update_hud() -> void:
-	var coverage := int(round(maze.get_coverage_percent())) if is_instance_valid(maze) else 0
+	var coverage: int = int(round(maze.get_coverage_percent())) if is_instance_valid(maze) else 0
 	ui.set_hud(level, lives, score, coins_total, coverage)
 
 func _next_level() -> void:
