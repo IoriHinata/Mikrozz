@@ -527,21 +527,21 @@ func activate_sequence_plate(index: int) -> void:
 	if index == sequence_next:
 		sequence_next += 1
 		if sequence_next >= 3:
-			level_mechanic_event.emit("Sequence solved! +12", 12)
+			level_mechanic_event.emit("Последовательность разгадана! +12", 12)
 			sequence_next = 0
 			for child in get_children():
 				if child is SequencePlate:
 					child.triggered = false
 					child.queue_redraw()
 		else:
-			level_mechanic_event.emit("Correct plate %d/3" % sequence_next, 0)
+			level_mechanic_event.emit("Верная плита: %d/3" % sequence_next, 0)
 	else:
 		sequence_next = 0
 		for child in get_children():
 			if child is SequencePlate:
 				child.triggered = false
 				child.queue_redraw()
-		level_mechanic_event.emit("Wrong order — sequence reset", 0)
+		level_mechanic_event.emit("Неверный порядок — последовательность сброшена", 0)
 
 
 class HazardVisual:
