@@ -46,6 +46,7 @@ var camera: Camera2D
 var camera_zoom := 1.0
 var camera_pan_offset := Vector2.ZERO
 var autosave_elapsed := 0.0
+var hud_elapsed := 0.0
 var touch_points: Dictionary = {}
 var pinch_distance := 0.0
 var mouse_pan_active := false
@@ -483,7 +484,8 @@ func _on_gate_pressed(index: int, pressed: bool) -> void:
 		maze.set_gate_button_state(index, pressed)
 
 func _update_hud() -> void:
-	ui.set_hud(level, lives, score, coins_total)
+	var coverage := int(round(maze.get_coverage_percent())) if is_instance_valid(maze) else 0
+	ui.set_hud(level, lives, score, coins_total, coverage)
 
 func _next_level() -> void:
 	level += 1
@@ -583,6 +585,10 @@ func _process(delta: float) -> void:
 	if is_instance_valid(camera):
 		var target := _camera_focus_position() + camera_pan_offset
 		camera.global_position = camera.global_position.lerp(target, minf(1.0, delta * 8.0))
+	hud_elapsed += delta
+	if hud_elapsed >= 0.25:
+		hud_elapsed = 0.0
+		_update_hud()
 	autosave_elapsed += delta
 	if autosave_elapsed >= 2.0:
 		autosave_elapsed = 0.0
