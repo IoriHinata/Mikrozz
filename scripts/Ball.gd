@@ -4,12 +4,14 @@ class_name MikrozzBall
 var tilt_controller
 @export var radius := 13.0
 
+const MAX_ROLL_SPEED := 560.0
+
 func _ready() -> void:
 	add_to_group("player")
 	gravity_scale = 0.0
 	mass = 1.0
-	linear_damp = 2.8
-	angular_damp = 2.0
+	linear_damp = 1.65
+	angular_damp = 1.2
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
 	contact_monitor = true
 	max_contacts_reported = 8
@@ -26,16 +28,17 @@ func _physics_process(_delta: float) -> void:
 	var surface_mode := String(get_meta("surface_mode", "normal"))
 	match surface_mode:
 		"ice":
-			linear_damp = 0.35
+			linear_damp = 0.22
 		"sand":
 			linear_damp = 7.5
 		"sticky":
 			linear_damp = 10.0
 			linear_velocity *= 0.985
 		_:
-			linear_damp = 2.8
-	if linear_velocity.length() > 430.0:
-		linear_velocity = linear_velocity.normalized() * 430.0
+			linear_damp = 1.65
+	var speed := linear_velocity.length()
+	if speed > MAX_ROLL_SPEED:
+		linear_velocity = linear_velocity * (MAX_ROLL_SPEED / speed)
 
 func _draw() -> void:
 	draw_circle(Vector2(0, 2), radius + 1.5, Color("#d7e5dc"))
