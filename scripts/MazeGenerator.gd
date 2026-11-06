@@ -312,7 +312,7 @@ func _safe_neighbor_count(cell: Vector2i) -> int:
 func _hazard_too_close(cell: Vector2i) -> bool:
 	var center := _cell_center(cell)
 	for child in get_children():
-		if child is Node2D and child.is_in_group("hazard"):
+		if child is Node2D and (child.is_in_group("hazard") or child.is_in_group("maze_trap")):
 			if (child as Node2D).position.distance_to(center) < cell_size * 1.2:
 				return true
 	return false
@@ -714,6 +714,8 @@ func _build_special_mechanics(level_number: int) -> void:
 			special_mechanic_count += 1
 	if level_number >= 5 and solution.size() > 8:
 		var barrier_index := _find_free_path_index(0.72)
+		if barrier_index >= 0 and _hazard_too_close(solution[barrier_index]):
+			barrier_index = -1
 		if barrier_index >= 0:
 			_ensure_three_open_sides(solution[barrier_index])
 			if _safe_neighbor_count(solution[barrier_index]) < 3:
@@ -862,15 +864,21 @@ func _build_endless_theme_mechanics(level_number: int) -> void:
 				_ensure_three_open_sides(barrier_cell)
 				if _safe_neighbor_count(barrier_cell) >= 3:
 					safe_barrier_indices.append(route_index)
-			for i in range(mini(count, safe_barrier_indices.size())):
-				var barrier_cell: Vector2i = solution[safe_barrier_indices[i]]
+			var placed_barriers := 0
+			for route_index in safe_barrier_indices:
+				var barrier_cell: Vector2i = solution[route_index]
+				if _hazard_too_close(barrier_cell):
+					continue
 				var barrier := MovingBarrier.new()
 				barrier.position = _cell_center(barrier_cell)
 				barrier.travel = cell_size * 0.18
 				barrier.speed = minf(4.5, 1.0 + float(theme_stage + endless_cycle) * 0.22)
 				barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
 				add_child(barrier)
+				placed_barriers += 1
 				special_mechanic_count += 1
+				if placed_barriers >= count:
+					break
 		8:
 			for i in range(mini(count, route_indices.size())):
 				var magnet := MagnetField.new()
