@@ -25,6 +25,8 @@ var start_point := Vector2.ZERO
 var extra_balls: Array[RigidBody2D] = []
 var exit_balls_entered: Dictionary = {}
 var exit_required := 1
+var boss_required := false
+var boss_is_defeated := false
 var music_volume := 0.32
 var sfx_volume := 0.75
 var vibration_enabled := true
@@ -131,6 +133,8 @@ func _build_level() -> void:
 	start_point = maze.start_position
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
+	boss_required = level >= 10
+	boss_is_defeated = false
 	coins_total = _count_coins()
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
@@ -194,12 +198,15 @@ func _on_hazard_body(body: Node) -> void:
 func _on_exit_body(body: Node) -> void:
 	if not body.is_in_group("player") or level_locked:
 		return
+	if score < coins_total:
+		ui.set_message("Find all %d pearls first (%d/%d)" % [coins_total, score, coins_total])
+		return
+	if boss_required and not boss_is_defeated:
+		ui.set_message("Defeat the boss before leaving")
+		return
 	exit_balls_entered[body.get_instance_id()] = true
 	if exit_balls_entered.size() < exit_required:
 		ui.set_message("Bring both pearls to the golden exit (%d/%d)" % [exit_balls_entered.size(), exit_required])
-		return
-	if score < coins_total:
-		ui.set_message("Find all %d pearls first (%d/%d)" % [coins_total, score, coins_total])
 		return
 	level_locked = true
 	best_score = maxi(best_score, total_run_score)
@@ -262,6 +269,9 @@ func _on_pressure_button_activated(index: int) -> void:
 	for hazard in maze.get_children():
 		if hazard is Area2D and hazard.is_in_group("hazard"):
 			hazard.set_deferred("monitoring", false)
+	for hazard in maze.get_children():
+		if hazard is Area2D and hazard.is_in_group("hazard") and hazard.has_method("set_safe_disabled"):
+			hazard.set_safe_disabled(true)
 	get_tree().create_timer(4.0).timeout.connect(_restore_hazards.bind(maze))
 	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
 	audio.play_win()
@@ -274,7 +284,10 @@ func _restore_hazards(target_maze: Node) -> void:
 		return
 	for hazard in target_maze.get_children():
 		if hazard is Area2D and hazard.is_in_group("hazard"):
-			hazard.set_deferred("monitoring", true)
+			if hazard.has_method("set_safe_disabled"):
+				hazard.set_safe_disabled(false)
+			else:
+				hazard.set_deferred("monitoring", true)
 
 func _on_pop_ball_popped(red_ball: RigidBody2D) -> void:
 	var points := int(red_ball.get("score_value")) if is_instance_valid(red_ball) else 2
@@ -294,6 +307,7 @@ func _on_level_mechanic_event(message: String, points: int) -> void:
 		_save_progress()
 
 func _on_boss_defeated() -> void:
+	boss_is_defeated = true
 	total_run_score += 20
 	ui.set_message("Boss defeated! +20 bonus points")
 	audio.play_win()
