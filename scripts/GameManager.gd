@@ -39,6 +39,7 @@ var saved_ball_positions: Array[Vector2] = []
 var saved_ball_velocities: Array[Vector2] = []
 var saved_boss_defeated := false
 var saved_sequence_next := 0
+var saved_safe_passage_time := 0.0
 var camera: Camera2D
 var camera_zoom := 1.0
 var camera_pan_offset := Vector2.ZERO
@@ -140,6 +141,7 @@ func _load_progress() -> void:
 				saved_ball_velocities.append(saved_velocity)
 		saved_boss_defeated = bool(cfg.get_value("state", "boss_defeated", false))
 		saved_sequence_next = int(cfg.get_value("state", "sequence_next", 0))
+		saved_safe_passage_time = maxf(0.0, float(cfg.get_value("state", "safe_passage_time", 0.0)))
 		camera_zoom = clampf(float(cfg.get_value("state", "camera_zoom", 1.0)), 0.18, 2.8)
 		camera_pan_offset = cfg.get_value("state", "camera_pan", Vector2.ZERO)
 	if not tutorial_completed:
@@ -175,6 +177,7 @@ func _save_progress(saved_level: int = -1) -> void:
 		cfg.set_value("state", "ball_velocities", velocities)
 		cfg.set_value("state", "boss_defeated", boss_is_defeated)
 		cfg.set_value("state", "sequence_next", maze.sequence_next)
+		cfg.set_value("state", "safe_passage_time", safe_passage_timer.time_left if is_instance_valid(safe_passage_timer) else 0.0)
 		cfg.set_value("state", "camera_zoom", camera_zoom)
 		cfg.set_value("state", "camera_pan", camera_pan_offset)
 	else:
@@ -195,6 +198,8 @@ func _start_run() -> void:
 
 func _start_level() -> void:
 	level_locked = false
+	if is_instance_valid(safe_passage_timer):
+		safe_passage_timer.stop()
 	if not restore_level_state:
 		score = 0
 		level_seed = randi()
@@ -224,6 +229,10 @@ func _build_level() -> void:
 		maze.apply_level_snapshot(saved_maze_snapshot)
 		maze.remove_collected_coins(collected_coin_positions)
 		maze.sequence_next = saved_sequence_next
+		if saved_boss_defeated:
+			for maze_child in maze.get_children():
+				if maze_child.is_in_group("boss"):
+					maze_child.queue_free()
 	exit_required = 2 if level >= 8 else 1
 	exit_balls_entered.clear()
 	boss_required = level >= 10
@@ -237,6 +246,9 @@ func _build_level() -> void:
 	_spawn_ball()
 	if restoring_level:
 		_restore_player_bodies()
+		if saved_safe_passage_time > 0.0:
+			safe_passage_timer.start(saved_safe_passage_time)
+		saved_safe_passage_time = 0.0
 		restore_level_state = false
 	if is_instance_valid(camera):
 		camera.global_position = _camera_focus_position() + camera_pan_offset
