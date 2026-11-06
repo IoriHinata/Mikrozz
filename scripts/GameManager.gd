@@ -87,7 +87,7 @@ func _save_settings() -> void:
 	cfg.set_value("controls", "vibration", vibration_enabled)
 	var error := cfg.save(SETTINGS_PATH)
 	if error != OK:
-		push_warning("Could not save settings: %s" % error)
+		push_warning("Не удалось сохранить настройки: %s" % error)
 
 func _load_progress() -> void:
 	var cfg := ConfigFile.new()
@@ -107,7 +107,7 @@ func _save_progress(saved_level: int = -1) -> void:
 	cfg.set_value("progress", "tutorial_completed", tutorial_completed)
 	var error := cfg.save(PROGRESS_PATH)
 	if error != OK:
-		push_warning("Could not save progress: %s" % error)
+		push_warning("Не удалось сохранить прогресс: %s" % error)
 
 func _start_run() -> void:
 	level = 1 if tutorial_completed else 0
@@ -149,18 +149,18 @@ func _build_level() -> void:
 
 func _level_intro_message() -> String:
 	match level:
-		0: return "PRACTICE • Tilt, collect pearls, reach the exit"
-		1: return "ICE FLOOR • Momentum carries farther"
-		2: return "PORTALS • Explore side passages"
-		3: return "CONVEYORS • Watch the moving floor"
-		4: return "SPRINGS • Plan your landing"
-		5: return "MOVING WALLS • Time your passage"
-		6: return "MAGNETS + ROTATING BRIDGE • Control your momentum"
-		7: return "LASERS • Cross only while inactive"
-		8: return "TWO PEARLS • Bring both to the exit; solve the sequence"
-		9: return "HIDDEN MAZE • Walls reveal near the pearl"
-		10: return "BOSS • Tap the moving core three times"
-		_: return "Collect every pearl and reach the golden exit"
+		0: return "ТРЕНИРОВКА • Наклоняйте телефон, собирайте жемчужины и найдите выход"
+		1: return "ЛЁД • Шарик скользит дальше по инерции"
+		2: return "ПОРТАЛЫ • Исследуйте боковые проходы"
+		3: return "КОНВЕЙЕРЫ • Следите за движущимся полом"
+		4: return "ПРУЖИНЫ • Рассчитывайте место приземления"
+		5: return "ДВИЖУЩИЕСЯ СТЕНЫ • Выбирайте момент для прохода"
+		6: return "МАГНИТЫ И ВРАЩАЮЩИЙСЯ МОСТ • Контролируйте инерцию"
+		7: return "ЛАЗЕРЫ • Пересекайте их только в выключенном состоянии"
+		8: return "ДВЕ ЖЕМЧУЖИНЫ • Доставьте обе к выходу и решите головоломку"
+		9: return "СКРЫТЫЙ ЛАБИРИНТ • Стены видны рядом с шариком"
+		10: return "БОСС • Трижды нажмите на движущееся ядро"
+		_: return "Соберите все жемчужины и доберитесь до золотого выхода"
 
 func _count_coins() -> int:
 	var total := 0
@@ -209,7 +209,7 @@ func _on_coin_body(body: Node, coin: Node2D) -> void:
 		audio.play_coin()
 		_update_hud()
 		if score >= coins_total:
-			ui.set_message("All pearls found! Reach the golden exit")
+			ui.set_message("Все жемчужины собраны! Доберитесь до золотого выхода")
 
 func _on_hazard_body(body: Node) -> void:
 	if body.is_in_group("player"):
@@ -219,14 +219,14 @@ func _on_exit_body(body: Node) -> void:
 	if not body.is_in_group("player") or level_locked:
 		return
 	if score < coins_total:
-		ui.set_message("Find all %d pearls first (%d/%d)" % [coins_total, score, coins_total])
+		ui.set_message("Сначала соберите все жемчужины: %d/%d" % [coins_total, score, coins_total])
 		return
 	if boss_required and not boss_is_defeated:
-		ui.set_message("Defeat the boss before leaving")
+		ui.set_message("Перед выходом победите босса")
 		return
 	exit_balls_entered[body.get_instance_id()] = true
 	if exit_balls_entered.size() < exit_required:
-		ui.set_message("Bring both pearls to the golden exit (%d/%d)" % [exit_balls_entered.size(), exit_required])
+		ui.set_message("Доставьте оба шарика к золотому выходу: %d/%d" % [exit_balls_entered.size(), exit_required])
 		return
 	level_locked = true
 	best_score = maxi(best_score, total_run_score)
@@ -237,7 +237,7 @@ func _on_exit_body(body: Node) -> void:
 	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
 		Input.vibrate_handheld(90)
-	ui.show_result("MAZE CLEARED!", "Level %d • Run score %d • Best %d" % [level, total_run_score, best_score], true)
+	ui.show_result("ЛАБИРИНТ ПРОЙДЕН!", "Уровень %d • Очки за игру: %d • Рекорд: %d" % [level, total_run_score, best_score], true)
 
 func _lose_life() -> void:
 	if level_locked:
@@ -251,7 +251,7 @@ func _lose_life() -> void:
 	_update_hud()
 	if lives <= 0:
 		_save_progress()
-		ui.show_result("OUT OF LIVES", "Run score: %d" % total_run_score, false)
+		ui.show_result("ЖИЗНИ ЗАКОНЧИЛИСЬ", "Очки за игру: %d" % total_run_score, false)
 	else:
 		_respawn_all.call_deferred()
 
@@ -283,7 +283,7 @@ func _respawn_all() -> void:
 	ui.make_gate_buttons(maze.gate_bodies.size())
 	_spawn_ball()
 	level_locked = false
-	ui.set_message("Room reset — try another route")
+	ui.set_message("Комната перезапущена — попробуйте другой путь")
 	_update_hud()
 
 func _on_pressure_button_activated(index: int) -> void:
@@ -297,7 +297,7 @@ func _on_pressure_button_activated(index: int) -> void:
 			else:
 				hazard.set_deferred("monitoring", false)
 	safe_passage_timer.start(4.0)
-	ui.set_message("Bonus plate %d: safe passage for 4 seconds! +3" % (index + 1))
+	ui.set_message("Бонусная плита %d: безопасный проход на 4 секунды! +3" % (index + 1))
 	audio.play_win()
 	if vibration_enabled and (OS.has_feature("android") or OS.has_feature("ios")):
 		Input.vibrate_handheld(45)
@@ -323,7 +323,7 @@ func _on_pop_ball_popped(red_ball: RigidBody2D) -> void:
 	if orb_type == "boost" and is_instance_valid(ball):
 		ball.linear_velocity *= 1.35
 	audio.play_coin()
-	ui.set_message("Bonus orb popped! +%d points" % points)
+	ui.set_message("Бонусный шарик лопнул! +%d очков" % points)
 	_save_progress()
 
 func _on_level_mechanic_event(message: String, points: int) -> void:
@@ -336,14 +336,14 @@ func _on_level_mechanic_event(message: String, points: int) -> void:
 func _on_boss_defeated() -> void:
 	boss_is_defeated = true
 	total_run_score += 20
-	ui.set_message("Boss defeated! +20 bonus points")
+	ui.set_message("Босс побеждён! Бонус: +20 очков")
 	audio.play_win()
 	_save_progress()
 
 func _on_tutorial_finished() -> void:
 	tutorial_completed = true
 	_save_progress()
-	ui.set_message("Practice room: collect the pearls and reach the golden exit")
+	ui.set_message("Тренировочная комната: соберите жемчужины и доберитесь до золотого выхода")
 
 func _on_gate_pressed(index: int, pressed: bool) -> void:
 	if is_instance_valid(maze):
@@ -361,7 +361,7 @@ func _restart_run() -> void:
 
 func _calibrate_tilt() -> void:
 	tilt.calibrate()
-	ui.set_message("Tilt calibrated — keep phone level for a moment")
+	ui.set_message("Наклон откалиброван — ненадолго оставьте телефон неподвижным")
 
 func _set_touch_direction(direction: Vector2) -> void:
 	tilt.set_touch_direction(direction)
