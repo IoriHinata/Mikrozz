@@ -201,7 +201,7 @@ jobs:
               assert(generator.get_visited_cells().size() == inside_count, "Visited-cell save data incomplete at level %d" % level)
               var wall_body = generator.get_node_or_null("BatchedMazeWalls")
               assert(wall_body != null and generator.wall_count > 0, "Batched wall collision missing at level %d" % level)
-              assert(is_equal_approx(generator.cell_size_x * generator.cell_size_y, 1764.0), "Logical cell area changed at level %d" % level)
+              assert(is_equal_approx(generator.cell_size_x * generator.cell_size_y, 3600.0), "Logical cell area changed at level %d" % level)
               assert(generator.gate_bodies.size() <= 3, "Too many gates at level %d" % level)
               for i in range(generator.solution.size() - 1):
                 var a: Vector2i = generator.solution[i]
