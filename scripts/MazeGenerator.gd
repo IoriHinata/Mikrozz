@@ -371,10 +371,26 @@ func _cell_edge_center(cell: Vector2i, direction: int) -> Vector2:
 func _cell_edge_size(direction: int) -> Vector2:
 	return Vector2(cell_size + 5, 12) if direction == 0 or direction == 2 else Vector2(12, cell_size + 5)
 
+func _find_free_path_index(fraction: float) -> int:
+	if solution.size() < 5:
+		return -1
+	var desired := clampi(int(float(solution.size() - 1) * fraction), 2, solution.size() - 3)
+	for radius in range(solution.size()):
+		var candidates: Array[int] = [desired]
+		if radius > 0:
+			candidates.append(desired - radius)
+			candidates.append(desired + radius)
+		for index in candidates:
+			if index < 2 or index > solution.size() - 3:
+				continue
+			if not _cell_is_occupied(solution[index]):
+				return index
+	return -1
+
 func _cell_is_occupied(cell: Vector2i) -> bool:
 	var center := _cell_center(cell)
 	for child in get_children():
-		if child is Node2D and (child.is_in_group("hazard") or child.is_in_group("puzzle_plates") or child.is_in_group("special_occupied")):
+		if child is Node2D and (child.is_in_group("hazard") or child.is_in_group("puzzle_plates") or child.is_in_group("special_occupied") or child.is_in_group("coins")):
 			if (child as Node2D).position.distance_to(center) < cell_size * 0.34:
 				return true
 	return false
@@ -383,13 +399,14 @@ func _build_special_mechanics(level_number: int) -> void:
 	sequence_next = 0
 	special_mechanic_count = 0
 	if level_number >= 1 and solution.size() > 5:
-		var surface_index := clampi(int(solution.size() * 0.42), 2, solution.size() - 3)
-		var surface := SurfaceZone.new()
-		surface.mode = ["ice", "sand", "sticky", "ice", "sand"][posmod(level_number - 1, 5)]
-		surface.position = _cell_center(solution[surface_index])
-		surface.size_radius = cell_size * 0.34
-		add_child(surface)
-		special_mechanic_count += 1
+		var surface_index := _find_free_path_index(0.42)
+		if surface_index >= 0:
+			var surface := SurfaceZone.new()
+			surface.mode = ["ice", "sand", "sticky", "ice", "sand"][posmod(level_number - 1, 5)]
+			surface.position = _cell_center(solution[surface_index])
+			surface.size_radius = cell_size * 0.34
+			add_child(surface)
+			special_mechanic_count += 1
 	if level_number >= 2:
 		var branches: Array[Vector2i] = []
 		for y in range(rows):
@@ -409,39 +426,49 @@ func _build_special_mechanics(level_number: int) -> void:
 			add_child(portal_b)
 			special_mechanic_count += 1
 	if level_number >= 3 and solution.size() > 6:
-		var conveyor := ConveyorZone.new()
-		conveyor.position = _cell_center(solution[clampi(int(solution.size() * 0.32), 2, solution.size() - 3)])
-		conveyor.direction = Vector2.RIGHT if level_number % 2 == 1 else Vector2.LEFT
-		add_child(conveyor)
-		special_mechanic_count += 1
+		var conveyor_index := _find_free_path_index(0.32)
+		if conveyor_index >= 0:
+			var conveyor := ConveyorZone.new()
+			conveyor.position = _cell_center(solution[conveyor_index])
+			conveyor.direction = Vector2.RIGHT if level_number % 2 == 1 else Vector2.LEFT
+			add_child(conveyor)
+			special_mechanic_count += 1
 	if level_number >= 4 and solution.size() > 7:
-		var spring := SpringPad.new()
-		spring.position = _cell_center(solution[clampi(int(solution.size() * 0.58), 2, solution.size() - 3)])
-		spring.kick_direction = Vector2.UP if level_number % 2 == 0 else Vector2.RIGHT
-		add_child(spring)
-		special_mechanic_count += 1
+		var spring_index := _find_free_path_index(0.58)
+		if spring_index >= 0:
+			var spring := SpringPad.new()
+			spring.position = _cell_center(solution[spring_index])
+			spring.kick_direction = Vector2.UP if level_number % 2 == 0 else Vector2.RIGHT
+			add_child(spring)
+			special_mechanic_count += 1
 	if level_number >= 5 and solution.size() > 8:
-		var barrier := MovingBarrier.new()
-		barrier.position = _cell_center(solution[clampi(int(solution.size() * 0.72), 2, solution.size() - 3)])
-		barrier.travel = cell_size * 0.22
-		barrier.speed = 1.25 + float(level_number) * 0.04
-		barrier.barrier_size = Vector2(cell_size * 0.42, 9.0)
-		add_child(barrier)
-		special_mechanic_count += 1
+		var barrier_index := _find_free_path_index(0.72)
+		if barrier_index >= 0:
+			var barrier := MovingBarrier.new()
+			barrier.position = _cell_center(solution[barrier_index])
+			barrier.travel = cell_size * 0.18
+			barrier.speed = 1.25 + float(level_number) * 0.04
+			barrier.barrier_size = Vector2(cell_size * 0.25, 8.0)
+			add_child(barrier)
+			special_mechanic_count += 1
 	if level_number >= 6:
-		var magnet := MagnetField.new()
-		magnet.position = _cell_center(solution[clampi(int(solution.size() * 0.50), 2, solution.size() - 3)])
-		magnet.radius = cell_size * 1.7
-		magnet.strength = 130.0
-		add_child(magnet)
-		special_mechanic_count += 1
+		var magnet_index := _find_free_path_index(0.50)
+		if magnet_index >= 0:
+			var magnet := MagnetField.new()
+			magnet.position = _cell_center(solution[magnet_index])
+			magnet.radius = cell_size * 1.45
+			magnet.strength = 110.0
+			add_child(magnet)
+			special_mechanic_count += 1
 	if level_number >= 6 and solution.size() > 10:
-		var bridge := RotatingBridge.new()
-		bridge.position = _cell_center(solution[clampi(int(solution.size() * 0.84), 2, solution.size() - 3)])
-		bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
-		bridge.rotation_speed = 0.9
-		add_child(bridge)
-		special_mechanic_count += 1
+		var bridge_index := _find_free_path_index(0.84)
+		if bridge_index >= 0:
+			var bridge := RotatingBridge.new()
+			bridge.position = _cell_center(solution[bridge_index])
+			bridge.bridge_size = Vector2(cell_size * 0.66, 7.0)
+			bridge.rotation_speed = 0.9
+			add_child(bridge)
+			special_mechanic_count += 1
 	if level_number >= 7:
 		var laser_cells: Array[Vector2i] = []
 		for y in range(rows):
@@ -457,20 +484,27 @@ func _build_special_mechanics(level_number: int) -> void:
 			hazard_created.emit(laser)
 			special_mechanic_count += 1
 	if level_number >= 8 and solution.size() > 8:
+		var sequence_created := 0
 		for i in range(3):
+			var plate_index := _find_free_path_index(float(i + 1) / 4.0)
+			if plate_index < 0:
+				continue
 			var plate := SequencePlate.new()
-			plate.plate_index = i
-			plate.position = _cell_center(solution[clampi(int(solution.size() * float(i + 1) / 4.0), 2, solution.size() - 3)])
+			plate.plate_index = sequence_created
+			plate.position = _cell_center(solution[plate_index])
 			plate.sequence_owner = self
 			add_child(plate)
-		special_mechanic_count += 1
+			sequence_created += 1
+		if sequence_created == 3:
+			special_mechanic_count += 1
 	if level_number >= 10:
-		var boss := BossOrb.new()
-		boss.position = _cell_center(solution[clampi(int(solution.size() * 0.68), 2, solution.size() - 3)])
-		add_child(boss)
-		hazard_created.emit(boss)
-		boss.defeated.connect(func(): boss_defeated.emit())
-		special_mechanic_count += 1
+		var boss_index := _find_free_path_index(0.68)
+		if boss_index >= 0:
+			var boss := BossOrb.new()
+			boss.position = _cell_center(solution[boss_index])
+			add_child(boss)
+			boss.defeated.connect(func(): boss_defeated.emit())
+			special_mechanic_count += 1
 
 func activate_sequence_plate(index: int) -> void:
 	if index == sequence_next:
@@ -555,6 +589,7 @@ class SurfaceZone:
 	var mode := "ice"
 	var size_radius := 14.0
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		collision_layer = 0
 		collision_mask = 1
 		var shape := CircleShape2D.new()
@@ -581,6 +616,7 @@ class PortalPad:
 	var destination := Vector2.ZERO
 	var cooldown := false
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		collision_layer = 0
 		collision_mask = 1
 		var shape := CircleShape2D.new()
@@ -611,6 +647,7 @@ class ConveyorZone:
 	var direction := Vector2.RIGHT
 	var active_body: RigidBody2D
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		collision_layer = 0
 		collision_mask = 1
 		var shape := RectangleShape2D.new()
@@ -639,6 +676,7 @@ class SpringPad:
 	extends Area2D
 	var kick_direction := Vector2.UP
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		collision_layer = 0
 		collision_mask = 1
 		var shape := CircleShape2D.new()
@@ -664,6 +702,7 @@ class MovingBarrier:
 	var elapsed := 0.0
 	var initial_position := Vector2.ZERO
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		initial_position = position
 		sync_to_physics = true
 		var shape := RectangleShape2D.new()
@@ -685,6 +724,7 @@ class RotatingBridge:
 	var elapsed := 0.0
 	var initial_rotation := 0.0
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		initial_rotation = rotation
 		sync_to_physics = true
 		var shape := RectangleShape2D.new()
@@ -703,6 +743,8 @@ class MagnetField:
 	extends Node2D
 	var radius := 70.0
 	var strength := 130.0
+	func _ready() -> void:
+		add_to_group("special_occupied")
 	func _physics_process(_delta: float) -> void:
 		for player in get_tree().get_nodes_in_group("player"):
 			if not is_instance_valid(player) or not (player is RigidBody2D):
@@ -781,6 +823,7 @@ class BossOrb:
 	var health := 3
 	var target: Node2D
 	func _ready() -> void:
+		add_to_group("special_occupied")
 		input_pickable = true
 		var shape := CircleShape2D.new()
 		shape.radius = 17.0
