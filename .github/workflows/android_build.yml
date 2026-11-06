@@ -192,6 +192,15 @@ jobs:
               for cell in generator.solution:
                 visited[cell] = true
               assert(visited.size() == inside_count, "Route does not cover every cell at level %d" % level)
+              assert(generator.get_coverage_percent() < 100.0, "Coverage should require real player movement at level %d" % level)
+              for y in range(generator.rows):
+                for x in range(generator.cols):
+                  if generator.cells[y][x]["inside"]:
+                    generator._mark_visited_world_position(generator._cell_center(Vector2i(x, y)))
+              assert(generator.get_coverage_percent() >= 99.9, "Coverage tracker failed at level %d" % level)
+              assert(generator.get_visited_cells().size() == inside_count, "Visited-cell save data incomplete at level %d" % level)
+              var wall_body = generator.get_node_or_null("BatchedMazeWalls")
+              assert(wall_body != null and generator.wall_count > 0, "Batched wall collision missing at level %d" % level)
               assert(is_equal_approx(generator.cell_size_x * generator.cell_size_y, 1764.0), "Logical cell area changed at level %d" % level)
               assert(generator.gate_bodies.size() <= 3, "Too many gates at level %d" % level)
               for i in range(generator.solution.size() - 1):
@@ -215,6 +224,8 @@ jobs:
               var verifier = Maze.new()
               root.add_child(verifier)
               verifier.generate(level, Vector2(480, 854), 710000 + level)
+              verifier.restore_visited_cells(generator.get_visited_cells())
+              assert(verifier.get_coverage_percent() >= 99.9, "Visited-cell restoration failed at level %d" % level)
               assert(generator.solution == verifier.solution, "Seed is not deterministic at level %d" % level)
               var tested_cols = generator.cols
               var tested_rows = generator.rows
