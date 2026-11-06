@@ -17,6 +17,9 @@ var theme_stage := 1
 var endless_mode := false
 var cell_size_x := 42.0
 var cell_size_y := 42.0
+var total_inside_cells := 0
+var visited_cells: Dictionary = {}
+var previous_player_positions: Dictionary = {}
 var pop_spawn_cells: Array[Vector2i] = []
 var pop_spawner_position := Vector2.ZERO
 
@@ -80,6 +83,7 @@ func generate(level_number: int, viewport_size: Vector2, seed_value: int = 0) ->
 	theme_id = posmod(int((level_number - 11) / 4), 13) if endless_mode else -1
 	theme_stage = posmod(level_number - 11, 4) + 1 if endless_mode else 1
 	_build_cells()
+	_initialize_coverage()
 	_add_maze_loops()
 	_build_solution()
 	_build_geometry(level_number)
@@ -99,6 +103,67 @@ func _process(_delta: float) -> void:
 			if is_instance_valid(player):
 				reveal_position = player.global_position
 				queue_redraw()
+
+func _initialize_coverage() -> void:
+	visited_cells.clear()
+	previous_player_positions.clear()
+	total_inside_cells = 0
+	for y in range(rows):
+		for x in range(cols):
+			if cells[y][x]["inside"]:
+				total_inside_cells += 1
+	visited_cells[start_cell] = true
+
+func _physics_process(_delta: float) -> void:
+	for player in get_tree().get_nodes_in_group("player"):
+		if not player is Node2D:
+			continue
+		var node := player as Node2D
+		var player_id := node.get_instance_id()
+		var current_position := node.global_position
+		if previous_player_positions.has(player_id):
+			var previous_position: Vector2 = previous_player_positions[player_id]
+			var distance := previous_position.distance_to(current_position)
+			if distance <= cell_size * 2.0:
+				var sample_step := maxf(4.0, minf(cell_size_x, cell_size_y) * 0.2)
+				var sample_count := maxi(1, ceili(distance / sample_step))
+				for sample_index in range(sample_count + 1):
+					var sample_position := previous_position.lerp(current_position, float(sample_index) / float(sample_count))
+					_mark_visited_world_position(sample_position)
+			else:
+				_mark_visited_world_position(current_position)
+		else:
+			_mark_visited_world_position(current_position)
+		previous_player_positions[player_id] = current_position
+
+func _mark_visited_world_position(world_position: Vector2) -> void:
+	var local_position := to_local(world_position)
+	var cell := Vector2i(
+		floori((local_position.x - origin.x) / cell_size_x),
+		floori((local_position.y - origin.y) / cell_size_y)
+	)
+	if cell.x < 0 or cell.x >= cols or cell.y < 0 or cell.y >= rows:
+		return
+	if cells[cell.y][cell.x]["inside"]:
+		visited_cells[cell] = true
+
+func get_coverage_percent() -> float:
+	if total_inside_cells <= 0:
+		return 0.0
+	return minf(100.0, float(visited_cells.size()) / float(total_inside_cells) * 100.0)
+
+func get_visited_cells() -> Array:
+	var result: Array = []
+	for cell in visited_cells.keys():
+		result.append(cell)
+	return result
+
+func restore_visited_cells(saved_cells: Array) -> void:
+	visited_cells.clear()
+	visited_cells[start_cell] = true
+	for saved_cell in saved_cells:
+		if saved_cell is Vector2i and saved_cell.x >= 0 and saved_cell.x < cols and saved_cell.y >= 0 and saved_cell.y < rows and cells[saved_cell.y][saved_cell.x]["inside"]:
+			visited_cells[saved_cell] = true
 
 func _build_cells() -> void:
 	cells.clear()
